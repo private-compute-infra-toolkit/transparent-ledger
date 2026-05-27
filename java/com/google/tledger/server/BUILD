@@ -79,16 +79,27 @@ java_library(
     ],
 )
 
+genrule(
+    name = "copy_logback_xml",
+    srcs = ["@rules_aws//build_defs/aws/enclave:logback.xml"],
+    outs = ["logback.xml"],
+    cmd = "cp $< $@",
+)
+
 java_binary(
     name = "server_main",
     srcs = [
         "ServerMain.java",
     ],
     main_class = "com.google.tledger.server.ServerMain",
+    resource_strip_prefix = "java/com/google/tledger/server",
+    resources = [":logback.xml"],
     visibility = ["//visibility:public"],
     runtime_deps = [
-        "@maven//:com_google_flogger_flogger_system_backend",
-        "@maven//:org_slf4j_slf4j_jdk14",
+        "@maven//:ch_qos_logback_logback_classic",
+        "@maven//:ch_qos_logback_logback_core",
+        "@maven//:com_google_flogger_flogger_slf4j_backend",
+        "@maven//:net_logstash_logback_logstash_logback_encoder",
     ],
     deps = [
         ":server",
