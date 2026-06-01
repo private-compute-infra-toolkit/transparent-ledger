@@ -28,7 +28,7 @@ def tledger_aws_eif_and_ami(
         subnet_id = ":subnet_id_flag",
         jar_file = "/server_main_deploy.jar",
         jar_path = "//java/com/google/tledger/server:server_main_deploy.jar",
-        service_name = "tledger",
+        service_name = "tldgr",
         **kwargs):
     """Generates a TLedger-specific AWS EIF and AMI with standard defaults.
 
@@ -44,7 +44,7 @@ def tledger_aws_eif_and_ami(
         subnet_id: Target label for the VPC subnet ID. Defaults to ":subnet_id_flag".
         jar_file: Target file name inside the enclave. Defaults to "/server_main_deploy.jar".
         jar_path: Label of the target JAR binary. Defaults to "//java/com/google/tledger/server:server_main_deploy.jar".
-        service_name: The name of the systemd service. Defaults to "tledger".
+        service_name: The name of the systemd service. Defaults to "tldgr".
         **kwargs: Additional arguments to pass to the underlying aws_eif_and_ami.
     """
     default_additional_container_tars = [

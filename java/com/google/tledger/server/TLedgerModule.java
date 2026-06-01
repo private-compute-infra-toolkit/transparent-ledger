@@ -48,6 +48,7 @@ import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import software.amazon.awssdk.regions.Region;
@@ -115,7 +116,17 @@ public class TLedgerModule extends AbstractModule {
 
     String resourceNamesJson = new Gson().toJson(awsResourceNames);
     byte[] userData = resourceNamesJson.getBytes(StandardCharsets.UTF_8);
-    Optional<GeneralNames> noSan = Optional.empty();
+    String env = awsInstanceMetadata.environment();
+    String domain = awsInstanceMetadata.domain();
+    String operatorRole = awsInstanceMetadata.accountId();
+    String trustDomain = constructTrustDomain(env, domain);
+    String spiffeId =
+        String.format(
+            "spiffe://%s/operator/pcit.goog/%s/publisher/google.com/pcit-release-bot/workload/transparent-ledger",
+            trustDomain, operatorRole);
+    GeneralName uriSan = new GeneralName(GeneralName.uniformResourceIdentifier, spiffeId);
+    Optional<GeneralNames> san = Optional.of(new GeneralNames(uriSan));
+    logger.atInfo().log("Setting root certificate Subject Alternative Name (SAN): %s", spiffeId);
 
     MeasurementBoundCertificateProvider provider =
         new KmsMeasurementBoundCertificateProvider(
@@ -132,7 +143,7 @@ public class TLedgerModule extends AbstractModule {
                 new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
                 new X500Name("C=US, O=Google LLC, CN=TLedger"),
                 Duration.ofDays(120),
-                noSan,
+                san,
                 KeyUsage.digitalSignature));
 
     provider.loadOrGenerateCertificate();
@@ -158,5 +169,16 @@ public class TLedgerModule extends AbstractModule {
   @Singleton
   public JsonFormat.Parser provideJsonFromatParser() {
     return JsonFormat.parser().ignoringUnknownFields();
+  }
+
+  private static String constructTrustDomain(String env, String domain) {
+    if ("prod".equals(env)) {
+      String cleanedDomain = domain;
+      if (domain.startsWith("aws.")) {
+        cleanedDomain = domain.substring("aws.".length());
+      }
+      return "tledger." + cleanedDomain;
+    }
+    return String.format("tledger.%s.%s", env, domain);
   }
 }

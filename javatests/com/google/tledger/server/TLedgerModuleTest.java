@@ -59,7 +59,9 @@ public class TLedgerModuleTest {
 
     injector =
         Guice.createInjector(
-            new TLedgerModule(mockArgs, new AwsInstanceMetadata(TEST_REGION, TEST_ACCOUNT_ID)));
+            new TLedgerModule(
+                mockArgs,
+                new AwsInstanceMetadata(TEST_REGION, TEST_ACCOUNT_ID, "testenv", "testdomain")));
   }
 
   @Test

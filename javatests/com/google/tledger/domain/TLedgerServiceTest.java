@@ -76,7 +76,10 @@ public class TLedgerServiceTest {
     Injector injector =
         Guice.createInjector(
             Modules.override(
-                    new TLedgerModule(args, new AwsInstanceMetadata("us-east-1", "123456789012")))
+                    new TLedgerModule(
+                        args,
+                        new AwsInstanceMetadata(
+                            "us-east-1", "123456789012", "testenv", "testdomain")))
                 .with(
                     new AbstractModule() {
                       @Override

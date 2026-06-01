@@ -176,7 +176,9 @@ public class ServerS3IntegrationTest {
         Guice.createInjector(
             Modules.override(
                     new TLedgerModule(
-                        args, new AwsInstanceMetadata(localstack.getRegion(), AWS_ACCOUNT_ID)))
+                        args,
+                        new AwsInstanceMetadata(
+                            localstack.getRegion(), AWS_ACCOUNT_ID, "testenv", "testdomain")))
                 .with(
                     new AbstractModule() {
                       @Override
