@@ -24,6 +24,8 @@ import static org.mockito.Mockito.when;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.adapters.EntryMapper;
+import com.google.tledger.domain.metric.Metrics;
+import com.google.tledger.domain.metric.Status;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.LedgerException;
 import java.nio.charset.StandardCharsets;
@@ -57,13 +59,14 @@ public class S3LedgerTest {
   private final JsonFormat.Parser parser = JsonFormat.parser();
   private String TEST_ENTRY_JSON;
   @Mock private S3Client s3Client;
+  @Mock private Metrics metrics;
 
   private S3Ledger s3Ledger;
 
   @Before
   public void setUp() throws Exception {
     TEST_ENTRY_JSON = printer.print(EntryMapper.toProto(TEST_ENTRY));
-    s3Ledger = new S3Ledger(s3Client, BUCKET_NAME, parser, printer);
+    s3Ledger = new S3Ledger(s3Client, BUCKET_NAME, parser, printer, metrics);
   }
 
   @Test
@@ -86,6 +89,7 @@ public class S3LedgerTest {
             StandardCharsets.UTF_8);
 
     assertThat(actualContent).isEqualTo(TEST_ENTRY_JSON);
+    verify(metrics).incrementLedgerWrites(Status.SUCCESS);
   }
 
   @Test
@@ -139,11 +143,12 @@ public class S3LedgerTest {
     s3Ledger.read(NAME);
   }
 
-  @Test(expected = LedgerException.class)
+  @Test
   public void write_s3Exceptions() {
     when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
         .thenThrow(S3Exception.builder().message("test error").build());
 
-    s3Ledger.write(TEST_ENTRY, NAME);
+    org.junit.Assert.assertThrows(LedgerException.class, () -> s3Ledger.write(TEST_ENTRY, NAME));
+    verify(metrics).incrementLedgerWrites(Status.FAILURE);
   }
 }

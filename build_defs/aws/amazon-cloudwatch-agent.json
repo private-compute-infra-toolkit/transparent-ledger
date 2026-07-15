@@ -1,0 +1,49 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "logfile": "/opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log"
+  },
+  "logs": {
+    "metrics_collected": {
+      "prometheus": {
+        "log_group_name": "tledger-metrics-logs",
+        "prometheus_config_path": "/opt/aws/amazon-cloudwatch-agent/etc/prometheus.yaml",
+        "emf_processor": {
+          "metric_namespace": "TLEDGER",
+          "metric_declaration": [
+            {
+              "source_labels": ["job"],
+              "label_matcher": "^tledger$",
+              "dimensions": [["method", "status"]],
+              "metric_selectors": [
+                "^tledger_server_total_duration_seconds_count$",
+                "^tledger_server_total_duration_seconds_sum$",
+                "^tledger_server_requests_total$"
+              ]
+            },
+            {
+              "source_labels": ["job"],
+              "label_matcher": "^tledger$",
+              "dimensions": [["status"]],
+              "metric_selectors": ["^tledger_ledgerWrites_total$"]
+            },
+            {
+              "source_labels": ["job"],
+              "label_matcher": "^tledger$",
+              "dimensions": [["status"]],
+              "metric_selectors": ["^tledger_mbsStatus$"]
+            },
+            {
+              "source_labels": ["job"],
+              "label_matcher": "^tledger$",
+              "dimensions": [[]],
+              "metric_selectors": [
+                "^tledger_root_certificate_validity_seconds$"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

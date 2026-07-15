@@ -21,6 +21,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.adapters.EntryMapper;
 import com.google.tledger.annotations.LedgerBucketName;
+import com.google.tledger.domain.metric.Metrics;
+import com.google.tledger.domain.metric.Status;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.Ledger;
 import com.google.tledger.domain.ports.LedgerException;
@@ -45,17 +47,20 @@ public class S3Ledger implements Ledger {
 
   private final JsonFormat.Parser parser;
   private final JsonFormat.Printer printer;
+  private final Metrics metrics;
 
   @Inject
   S3Ledger(
       S3Client s3Client,
       @LedgerBucketName String bucketName,
       JsonFormat.Parser parser,
-      JsonFormat.Printer printer) {
+      JsonFormat.Printer printer,
+      Metrics metrics) {
     this.s3Client = s3Client;
     this.bucketName = bucketName;
     this.parser = parser;
     this.printer = printer;
+    this.metrics = metrics;
   }
 
   @Override
@@ -71,14 +76,14 @@ public class S3Ledger implements Ledger {
     String jsonEntry;
     try {
       jsonEntry = printer.print(EntryMapper.toProto(entry));
+      s3Client.putObject(objectRequest, RequestBody.fromString(jsonEntry, StandardCharsets.UTF_8));
+      metrics.incrementLedgerWrites(Status.SUCCESS);
     } catch (InvalidProtocolBufferException e) {
+      metrics.incrementLedgerWrites(Status.FAILURE);
       throw new IllegalStateException(
           "The Entry proto object should never contain unknown Any types!", e);
-    }
-
-    try {
-      s3Client.putObject(objectRequest, RequestBody.fromString(jsonEntry, StandardCharsets.UTF_8));
     } catch (SdkClientException | S3Exception e) {
+      metrics.incrementLedgerWrites(Status.FAILURE);
       throw new LedgerException("Failed to write to the ledger for key: " + name, e);
     }
   }

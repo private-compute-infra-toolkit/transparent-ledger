@@ -18,16 +18,21 @@ java_library(
     name = "adapters",
     srcs = [
         "EntryMapper.java",
+        "SystemMetrics.java",
     ],
     visibility = ["//visibility:public"],
     runtime_deps = [
         "@maven//:com_google_flogger_flogger_system_backend",
     ],
     deps = [
+        "//java/com/google/tledger/domain/metric",
         "//java/com/google/tledger/domain/model",
         "//java/com/google/tledger/proto:entry_java_proto",
         "@maven//:com_google_flogger_flogger",
         "@maven//:com_google_protobuf_protobuf_java",
+        "@maven//:io_micrometer_micrometer_core",
+        "@maven//:io_micrometer_micrometer_registry_prometheus",
         "@maven//:jakarta_inject_jakarta_inject_api",
+        "@pcit_mbs//java/com/google/mbs:certmanagement",
     ],
 )

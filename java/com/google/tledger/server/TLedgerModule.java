@@ -30,22 +30,28 @@ import com.google.mbs.MeasurementBoundCertificateProvider;
 import com.google.mbs.attestationcollection.AttestationCollector;
 import com.google.mbs.attestationcollection.aws.AwsAttestationModule;
 import com.google.protobuf.util.JsonFormat;
+import com.google.tledger.adapters.SystemMetrics;
 import com.google.tledger.adapters.entryid.Sha256EntryIdProvider;
 import com.google.tledger.adapters.ledger.S3Ledger;
 import com.google.tledger.adapters.signature.RsaEntrySigner;
 import com.google.tledger.annotations.LedgerBucketName;
 import com.google.tledger.domain.TLedger;
 import com.google.tledger.domain.TLedgerService;
+import com.google.tledger.domain.metric.Metrics;
 import com.google.tledger.domain.ports.EntryIdProvider;
 import com.google.tledger.domain.ports.EntrySigner;
 import com.google.tledger.domain.ports.Ledger;
 import com.google.tlog.TlogEntry;
 import com.google.tlog.TransparencyLogClient;
+import io.micrometer.core.instrument.config.MeterFilter;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.inject.Singleton;
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.GeneralName;
@@ -80,6 +86,8 @@ public class TLedgerModule extends AbstractModule {
         .annotatedWith(LedgerBucketName.class)
         .toInstance(awsResourceNames.ledgerBucketName());
     bind(EntrySigner.class).to(RsaEntrySigner.class);
+    bind(Metrics.class).to(SystemMetrics.class);
+    bind(com.google.mbs.Metrics.class).to(SystemMetrics.class);
 
     install(new AwsKmsClientModule(awsInstanceMetadata.region()));
     install(new AwsAttestationModule());
@@ -109,7 +117,8 @@ public class TLedgerModule extends AbstractModule {
       S3Client s3Client,
       KmsClientInterface kmsClient,
       TransparencyLogClient transparencyLogClient,
-      AttestationCollector attestationCollector) {
+      AttestationCollector attestationCollector,
+      com.google.mbs.Metrics metrics) {
     if (args.isLocalMode()) {
       return new DummyMeasurementBoundCertificateProvider();
     }
@@ -142,12 +151,19 @@ public class TLedgerModule extends AbstractModule {
             MbsCertificateFactory.createSelfSignedCertificatesFactory(
                 new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
                 new X500Name("C=US, O=Google LLC, CN=TLedger"),
-                Duration.ofDays(120),
+                Duration.between(Instant.now(), Instant.parse("2027-02-01T00:00:00Z")),
                 san,
-                KeyUsage.digitalSignature));
+                KeyUsage.digitalSignature),
+            metrics);
 
     provider.loadOrGenerateCertificate();
     return provider;
+  }
+
+  @Provides
+  @Singleton
+  public X509Certificate provideRootCertificate(MeasurementBoundCertificateProvider mbsProvider) {
+    return mbsProvider.loadOrGenerateCertificate().getCertificate();
   }
 
   @Provides
@@ -180,5 +196,17 @@ public class TLedgerModule extends AbstractModule {
       return "tledger." + cleanedDomain;
     }
     return String.format("tledger.%s.%s", env, domain);
+  }
+
+  @Provides
+  @Singleton
+  public PrometheusMeterRegistry providePrometheusMeterRegistry() {
+    PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+    registry
+        .config()
+        .meterFilter(MeterFilter.acceptNameStartsWith("tledger."))
+        .meterFilter(MeterFilter.acceptNameStartsWith("armeria.server.connections"))
+        .meterFilter(MeterFilter.deny());
+    return registry;
   }
 }

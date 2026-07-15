@@ -34,11 +34,14 @@ import com.google.tledger.v1.CreateEntryRequest;
 import com.google.tledger.v1.Entry;
 import com.google.tledger.v1.GetEntryRequest;
 import com.google.tledger.v1.TransparentLedgerServiceGrpc;
+import com.linecorp.armeria.client.WebClient;
+import com.linecorp.armeria.common.AggregatedHttpResponse;
+import com.linecorp.armeria.common.HttpStatus;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.inprocess.InProcessChannelBuilder;
-import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.testing.GrpcCleanupRule;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -46,6 +49,7 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.time.Duration;
 import java.util.List;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -81,6 +85,7 @@ public class ServerS3IntegrationTest {
   private KeyPair testRsaKeyPair;
 
   private TransparentLedgerServiceGrpc.TransparentLedgerServiceBlockingStub tledgerClient;
+  private TLedgerServer tledgerServer;
   public static LocalStackContainer localstack =
       new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.14.0"))
           .withServices(LocalStackContainer.Service.S3)
@@ -101,6 +106,13 @@ public class ServerS3IntegrationTest {
     createTestBucket();
     initializeMocks();
     startServerAndSetupClient(BUCKET_NAME);
+  }
+
+  @After
+  public void tearDown() {
+    if (tledgerServer != null) {
+      tledgerServer.stop().join();
+    }
   }
 
   private static void initializeS3Client() {
@@ -192,20 +204,17 @@ public class ServerS3IntegrationTest {
                     }));
 
     TransparentLedgerGrpcHandler handler = injector.getInstance(TransparentLedgerGrpcHandler.class);
+    PrometheusMeterRegistry meterRegistry = injector.getInstance(PrometheusMeterRegistry.class);
 
-    String serverName = InProcessServerBuilder.generateName();
-
-    grpcCleanup.register(
-        InProcessServerBuilder.forName(serverName)
-            .directExecutor()
-            .addService(handler)
-            .build()
-            .start());
+    tledgerServer = new TLedgerServer(0, handler, meterRegistry);
+    tledgerServer.start().join();
 
     tledgerClient =
         TransparentLedgerServiceGrpc.newBlockingStub(
             grpcCleanup.register(
-                InProcessChannelBuilder.forName(serverName).directExecutor().build()));
+                ManagedChannelBuilder.forAddress("localhost", tledgerServer.port())
+                    .usePlaintext()
+                    .build()));
   }
 
   private boolean verifySignature(ByteString content, ByteString signature, PublicKey publicKey) {
@@ -357,5 +366,26 @@ public class ServerS3IntegrationTest {
     StatusRuntimeException exception =
         assertThrows(StatusRuntimeException.class, () -> tledgerClient.createEntry(createRequest));
     assertThat(exception.getStatus().getCode()).isEqualTo(Status.UNAVAILABLE.getCode());
+  }
+
+  private void triggerMetricsCollection() {
+    try {
+      tledgerClient.getEntry(GetEntryRequest.newBuilder().setName("").build());
+    } catch (StatusRuntimeException e) {
+      // Expected, triggered to initialize metrics
+    }
+  }
+
+  @Test
+  public void metricsEndpoint_returnsMetrics() throws Exception {
+    triggerMetricsCollection();
+
+    WebClient client = WebClient.of("http://localhost:" + tledgerServer.port());
+    AggregatedHttpResponse response = client.get("/metrics").aggregate().join();
+
+    assertThat(response.status()).isEqualTo(HttpStatus.OK);
+    String content = response.contentUtf8();
+    assertThat(content).contains("tledger_server");
+    assertThat(content).contains("armeria_server_connections");
   }
 }

@@ -32,6 +32,7 @@ import com.google.tledger.domain.TLedgerService;
 import com.google.tledger.domain.ports.EntryIdProvider;
 import com.google.tledger.domain.ports.EntrySigner;
 import com.google.tledger.domain.ports.Ledger;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -143,5 +144,11 @@ public class TLedgerModuleTest {
     JsonFormat.Parser parser1 = injector.getInstance(JsonFormat.Parser.class);
     JsonFormat.Parser parser2 = injector.getInstance(JsonFormat.Parser.class);
     assertThat(parser1).isSameInstanceAs(parser2);
+  }
+
+  @Test
+  public void providePrometheusMeterRegistry_providesNonNull() {
+    PrometheusMeterRegistry registry = injector.getInstance(PrometheusMeterRegistry.class);
+    assertThat(registry).isNotNull();
   }
 }

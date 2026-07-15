@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.4.0 (2026-07-15)
+
+
+### Dependencies
+
+* **deps:** Update DevKit to release-3.10.0
+* **deps:** Update DevKit to release-3.9.0
+
+
+### Features
+
+* Add metrics-exporter configuration
+* Change MBS metrics from counter to gauge
+* Expose main certificate validity metric
+* Fix cloudwatch-agent metrics namespace
+* Integrate MBS metrics
+* Introduce metrics module and endpoint
+* Introduce Metrics module to support custom metrics
+* Update cert validity to be 180 days
+* Update container-tools and fix prometheus setup
+* Update container-tools to fix enclave watcher resets
+* Update MBS. Set SKI in root cert. Set cache-control on backup
+* Update root certificate validity to expire on 2027-02-01
+
 ## 0.3.0 (2026-06-01)
 
 

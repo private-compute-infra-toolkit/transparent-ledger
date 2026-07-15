@@ -21,15 +21,7 @@ import com.beust.jcommander.ParameterException;
 import com.google.common.flogger.FluentLogger;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
-import com.linecorp.armeria.common.HttpResponse;
-import com.linecorp.armeria.common.HttpStatus;
-import com.linecorp.armeria.server.Server;
-import com.linecorp.armeria.server.grpc.GrpcService;
-import com.linecorp.armeria.server.logging.LoggingService;
-import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
-import io.grpc.protobuf.services.HealthStatusManager;
-import io.grpc.protobuf.services.ProtoReflectionService;
-import java.util.concurrent.atomic.AtomicReference;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 public class ServerMain {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
@@ -59,75 +51,30 @@ public class ServerMain {
 
     Injector injector = Guice.createInjector(new TLedgerModule(tledgerArgs, awsInstanceMetadata));
     TransparentLedgerGrpcHandler service = injector.getInstance(TransparentLedgerGrpcHandler.class);
-
-    HealthManager healthManager = new HealthManager();
+    PrometheusMeterRegistry meterRegistry = injector.getInstance(PrometheusMeterRegistry.class);
+    CertificateValidityReporter validityReporter =
+        injector.getInstance(CertificateValidityReporter.class);
+    validityReporter.startAsync();
 
     int port = 50051;
-    final GrpcService grpcService =
-        GrpcService.builder()
-            .addService(service)
-            .addService(ProtoReflectionService.newInstance())
-            .addService(healthManager.getGrpcHealthService())
-            .enableHttpJsonTranscoding(true)
-            .build();
+    TLedgerServer tledgerServer = new TLedgerServer(port, service, meterRegistry);
 
-    final Server server =
-        Server.builder()
-            .http(port)
-            .service(grpcService)
-            .service(
-                "/healthz",
-                (ctx, req) -> {
-                  if (healthManager.isServing()) {
-                    return HttpResponse.of(HttpStatus.OK);
-                  }
-                  return HttpResponse.of(HttpStatus.SERVICE_UNAVAILABLE);
-                })
-            .decorator(LoggingService.newDecorator())
-            .build();
-
-    server.start().join();
-    logger.atInfo().log("TLedger server started listening on port: %d", port);
-
-    healthManager.setStatus(ServingStatus.SERVING);
+    tledgerServer.start().join();
 
     Runtime.getRuntime()
         .addShutdownHook(
             new Thread(
                 () -> {
                   System.err.println("*** shutting down Armeria server since JVM is shutting down");
-                  healthManager.setStatus(ServingStatus.NOT_SERVING);
-                  server.stop().join();
+                  tledgerServer.stop().join();
+                  validityReporter.stopAsync();
                   System.err.println("*** server shut down");
                 }));
 
     try {
-      server.blockUntilShutdown();
+      tledgerServer.blockUntilShutdown();
     } catch (InterruptedException e) {
       logger.atInfo().log("Server interrupted.");
-    }
-  }
-
-  private static class HealthManager {
-    private final HealthStatusManager healthStatusManager;
-    private final AtomicReference<ServingStatus> currentStatus;
-
-    HealthManager() {
-      this.healthStatusManager = new HealthStatusManager();
-      this.currentStatus = new AtomicReference<>(ServingStatus.UNKNOWN);
-    }
-
-    synchronized void setStatus(ServingStatus status) {
-      currentStatus.set(status);
-      healthStatusManager.setStatus(HealthStatusManager.SERVICE_NAME_ALL_SERVICES, status);
-    }
-
-    boolean isServing() {
-      return currentStatus.get() == ServingStatus.SERVING;
-    }
-
-    io.grpc.BindableService getGrpcHealthService() {
-      return healthStatusManager.getHealthService();
     }
   }
 }

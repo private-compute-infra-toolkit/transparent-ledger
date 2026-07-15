@@ -26,6 +26,7 @@ java_library(
     deps = [
         "//java/com/google/tledger/adapters",
         "//java/com/google/tledger/annotations",
+        "//java/com/google/tledger/domain/metric",
         "//java/com/google/tledger/domain/model",
         "//java/com/google/tledger/domain/ports",
         "//java/com/google/tledger/proto:entry_java_proto",
