@@ -151,7 +151,7 @@ public class TLedgerModule extends AbstractModule {
             MbsCertificateFactory.createSelfSignedCertificatesFactory(
                 new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
                 new X500Name("C=US, O=Google LLC, CN=TLedger"),
-                Duration.between(Instant.now(), Instant.parse("2027-02-01T00:00:00Z")),
+                Duration.between(Instant.now(), Instant.parse("2027-02-02T13:00:00Z")),
                 san,
                 KeyUsage.digitalSignature),
             metrics);
