@@ -18,15 +18,13 @@ package com.google.tledger.server;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
-import static org.mockito.Mockito.when;
 
 import com.beust.jcommander.JCommander;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.MeasurementBoundCertificate;
-import com.google.mbs.MeasurementBoundCertificateProvider;
+import com.google.mbs.qualifier.MbsRoot;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.annotations.LedgerBucketName;
@@ -45,6 +43,7 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.time.Duration;
@@ -56,9 +55,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -79,9 +75,6 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 public class ServerS3IntegrationTest {
 
   @Rule public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
-  @Rule public final MockitoRule mockito = MockitoJUnit.rule();
-  @Mock private MeasurementBoundCertificateProvider mbsProvider;
-  @Mock private MeasurementBoundCertificate mbs;
   private KeyPair testRsaKeyPair;
 
   private TransparentLedgerServiceGrpc.TransparentLedgerServiceBlockingStub tledgerClient;
@@ -151,9 +144,6 @@ public class ServerS3IntegrationTest {
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
     keyGen.initialize(2048);
     testRsaKeyPair = keyGen.generateKeyPair();
-
-    when(mbsProvider.loadOrGenerateCertificate()).thenReturn(mbs);
-    when(mbs.getPrivateKey()).thenReturn(testRsaKeyPair.getPrivate());
   }
 
   private void startServerAndSetupClient(String bucketName) throws Exception {
@@ -199,7 +189,9 @@ public class ServerS3IntegrationTest {
                             .annotatedWith(LedgerBucketName.class)
                             .toInstance(bucketName);
                         bind(S3Client.class).toInstance(s3ClientToUse);
-                        bind(MeasurementBoundCertificateProvider.class).toInstance(mbsProvider);
+                        bind(PrivateKey.class)
+                            .annotatedWith(MbsRoot.class)
+                            .toInstance(testRsaKeyPair.getPrivate());
                       }
                     }));
 

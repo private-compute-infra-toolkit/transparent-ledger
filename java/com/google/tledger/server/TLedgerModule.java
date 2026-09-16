@@ -20,15 +20,13 @@ import com.google.common.flogger.FluentLogger;
 import com.google.gson.Gson;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
-import com.google.kmsclient.KmsClientInterface;
-import com.google.kmsclient.aws.AwsKmsClientModule;
-import com.google.mbs.DummyMeasurementBoundCertificateProvider;
-import com.google.mbs.KeyBackupBucketPropertiesFactory;
-import com.google.mbs.KmsMeasurementBoundCertificateProvider;
+import com.google.mbs.DummyMbsModule;
 import com.google.mbs.MbsCertificateFactory;
-import com.google.mbs.MeasurementBoundCertificateProvider;
-import com.google.mbs.attestationcollection.AttestationCollector;
-import com.google.mbs.attestationcollection.aws.AwsAttestationModule;
+import com.google.mbs.MbsModule;
+import com.google.mbs.qualifier.AttestationUserData;
+import com.google.mbs.qualifier.KmsKeyArn;
+import com.google.mbs.qualifier.PrivateBackupBucket;
+import com.google.mbs.qualifier.PublicBackupBucket;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.adapters.SystemMetrics;
 import com.google.tledger.adapters.entryid.Sha256EntryIdProvider;
@@ -41,15 +39,11 @@ import com.google.tledger.domain.metric.Metrics;
 import com.google.tledger.domain.ports.EntryIdProvider;
 import com.google.tledger.domain.ports.EntrySigner;
 import com.google.tledger.domain.ports.Ledger;
-import com.google.tlog.TlogEntry;
-import com.google.tlog.TransparencyLogClient;
 import io.micrometer.core.instrument.config.MeterFilter;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.inject.Singleton;
 import java.nio.charset.StandardCharsets;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -89,42 +83,33 @@ public class TLedgerModule extends AbstractModule {
     bind(Metrics.class).to(SystemMetrics.class);
     bind(com.google.mbs.Metrics.class).to(SystemMetrics.class);
 
-    install(new AwsKmsClientModule(awsInstanceMetadata.region()));
-    install(new AwsAttestationModule());
-  }
-
-  @Provides
-  @Singleton
-  public TransparencyLogClient provideTransparencyLogClient() {
-    // TODO: Provided custom Tlog implementation that posts to the ledger.
-    return new TransparencyLogClient() {
-      @Override
-      public TlogEntry recordCertificate(X509Certificate c, PrivateKey k) {
-        return new TlogEntry("{\"status\":\"dummy\"}");
-      }
-
-      @Override
-      public Optional<TlogEntry> getTlogEntryByCertificate(X509Certificate c) {
-        return Optional.of(new TlogEntry("{\"status\":\"dummy\"}"));
-      }
-    };
-  }
-
-  @Provides
-  @Singleton
-  public MeasurementBoundCertificateProvider provideMbs(
-      TLedgerArgs args,
-      S3Client s3Client,
-      KmsClientInterface kmsClient,
-      TransparencyLogClient transparencyLogClient,
-      AttestationCollector attestationCollector,
-      com.google.mbs.Metrics metrics) {
-    if (args.isLocalMode()) {
-      return new DummyMeasurementBoundCertificateProvider();
+    if (tLedgerArgs.isLocalMode()) {
+      logger.atInfo().log("Installing DummyMbsModule for local mode");
+      install(new DummyMbsModule());
+    } else {
+      logger.atInfo().log("Installing MbsModule with AWS region: %s", awsInstanceMetadata.region());
+      install(new MbsModule(awsInstanceMetadata.region()));
+      bind(String.class).annotatedWith(KmsKeyArn.class).toInstance(awsResourceNames.kmsKeyArn());
+      bind(String.class)
+          .annotatedWith(PublicBackupBucket.class)
+          .toInstance(awsResourceNames.certBackupBucketName());
+      bind(String.class)
+          .annotatedWith(PrivateBackupBucket.class)
+          .toInstance(awsResourceNames.keyBackupBucketName());
     }
+  }
 
+  @Provides
+  @Singleton
+  @AttestationUserData
+  byte[] provideUserData() {
     String resourceNamesJson = new Gson().toJson(awsResourceNames);
-    byte[] userData = resourceNamesJson.getBytes(StandardCharsets.UTF_8);
+    return resourceNamesJson.getBytes(StandardCharsets.UTF_8);
+  }
+
+  @Provides
+  @Singleton
+  MbsCertificateFactory provideMbsCertificateFactory() {
     String env = awsInstanceMetadata.environment();
     String domain = awsInstanceMetadata.domain();
     String operatorRole = awsInstanceMetadata.accountId();
@@ -137,33 +122,12 @@ public class TLedgerModule extends AbstractModule {
     Optional<GeneralNames> san = Optional.of(new GeneralNames(uriSan));
     logger.atInfo().log("Setting root certificate Subject Alternative Name (SAN): %s", spiffeId);
 
-    MeasurementBoundCertificateProvider provider =
-        new KmsMeasurementBoundCertificateProvider(
-            kmsClient,
-            s3Client,
-            new KeyBackupBucketPropertiesFactory(
-                    awsResourceNames.certBackupBucketName(), awsResourceNames.keyBackupBucketName())
-                .create(),
-            awsResourceNames.kmsKeyArn(),
-            userData,
-            transparencyLogClient,
-            attestationCollector,
-            MbsCertificateFactory.createSelfSignedCertificatesFactory(
-                new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
-                new X500Name("C=US, O=Google LLC, CN=TLedger"),
-                Duration.between(Instant.now(), Instant.parse("2027-02-02T13:00:00Z")),
-                san,
-                KeyUsage.digitalSignature),
-            metrics);
-
-    provider.loadOrGenerateCertificate();
-    return provider;
-  }
-
-  @Provides
-  @Singleton
-  public X509Certificate provideRootCertificate(MeasurementBoundCertificateProvider mbsProvider) {
-    return mbsProvider.loadOrGenerateCertificate().getCertificate();
+    return MbsCertificateFactory.createSelfSignedCertificatesFactory(
+        new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
+        new X500Name("C=US, O=Google LLC, CN=TLedger"),
+        Duration.between(Instant.now(), Instant.parse("2027-02-02T13:00:00Z")),
+        san,
+        KeyUsage.digitalSignature);
   }
 
   @Provides

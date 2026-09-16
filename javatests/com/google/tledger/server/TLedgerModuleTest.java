@@ -151,4 +151,21 @@ public class TLedgerModuleTest {
     PrometheusMeterRegistry registry = injector.getInstance(PrometheusMeterRegistry.class);
     assertThat(registry).isNotNull();
   }
+
+  @Test
+  public void configure_bindsMbsRootCertificate() {
+    java.security.cert.X509Certificate cert =
+        injector.getInstance(
+            Key.get(
+                java.security.cert.X509Certificate.class, com.google.mbs.qualifier.MbsRoot.class));
+    assertThat(cert).isNotNull();
+  }
+
+  @Test
+  public void configure_bindsMbsRootPrivateKey() {
+    java.security.PrivateKey key =
+        injector.getInstance(
+            Key.get(java.security.PrivateKey.class, com.google.mbs.qualifier.MbsRoot.class));
+    assertThat(key).isNotNull();
+  }
 }

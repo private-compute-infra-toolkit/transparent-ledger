@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.6.0 (2026-09-16)
+
+
+### Dependencies
+
+* **deps:** Update api to release-0.6.0
+* **deps:** Update container-tools to release-0.8.0
+* **deps:** Update DevKit to release-3.11.0
+
 ## 0.5.0 (2026-07-24)
 
 

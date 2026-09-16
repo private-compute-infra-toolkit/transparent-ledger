@@ -23,8 +23,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.MeasurementBoundCertificate;
-import com.google.mbs.MeasurementBoundCertificateProvider;
+import com.google.mbs.qualifier.MbsRoot;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.EntryIdProvider;
@@ -35,6 +34,7 @@ import com.google.tledger.server.TLedgerModule;
 import com.google.tledger.testing.InMemoryLedger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.util.Optional;
@@ -53,8 +53,6 @@ public class TLedgerServiceTest {
   @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
   @Mock private EntryIdProvider mockIdProvider;
-  @Mock private MeasurementBoundCertificateProvider mbcProvider;
-  @Mock private MeasurementBoundCertificate certificateBundle;
   private InMemoryLedger inMemoryLedger;
   private KeyPair testRsaKeyPair;
 
@@ -71,6 +69,10 @@ public class TLedgerServiceTest {
   public void setUp() throws Exception {
     inMemoryLedger = new InMemoryLedger();
 
+    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+    keyGen.initialize(2048);
+    testRsaKeyPair = keyGen.generateKeyPair();
+
     TLedgerArgs args = new TLedgerArgs();
 
     Injector injector =
@@ -86,17 +88,12 @@ public class TLedgerServiceTest {
                       protected void configure() {
                         bind(EntryIdProvider.class).toInstance(mockIdProvider);
                         bind(Ledger.class).toInstance(inMemoryLedger);
-                        bind(MeasurementBoundCertificateProvider.class).toInstance(mbcProvider);
+                        bind(PrivateKey.class)
+                            .annotatedWith(MbsRoot.class)
+                            .toInstance(testRsaKeyPair.getPrivate());
                       }
                     }));
     service = injector.getInstance(TLedgerService.class);
-
-    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-    keyGen.initialize(2048);
-    testRsaKeyPair = keyGen.generateKeyPair();
-
-    when(mbcProvider.loadOrGenerateCertificate()).thenReturn(certificateBundle);
-    when(certificateBundle.getPrivateKey()).thenReturn(testRsaKeyPair.getPrivate());
   }
 
   private boolean verifySignature(ByteString content, ByteString signature, PublicKey publicKey) {
