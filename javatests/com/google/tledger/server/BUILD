@@ -45,7 +45,7 @@ java_test(
         "@maven//:software_amazon_awssdk_regions",
         "@maven//:software_amazon_awssdk_s3",
         "@maven//:software_amazon_awssdk_sdk_core",
-        "@pcit_mbs//java/com/google/mbs:certmanagement",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )
 
@@ -54,6 +54,7 @@ java_test(
     size = "small",
     srcs = ["TLedgerModuleTest.java"],
     deps = [
+        "//java/com/google/tledger/adapters",
         "//java/com/google/tledger/adapters/entryid",
         "//java/com/google/tledger/adapters/ledger",
         "//java/com/google/tledger/adapters/signature",
@@ -70,12 +71,14 @@ java_test(
         "@maven//:com_google_truth_truth",
         "@maven//:io_micrometer_micrometer_registry_prometheus",
         "@maven//:junit_junit",
+        "@maven//:org_bouncycastle_bcpkix_jdk18on",
+        "@maven//:org_bouncycastle_bcprov_jdk18on",
         "@maven//:org_mockito_mockito_core",
         "@maven//:software_amazon_awssdk_regions",
         "@maven//:software_amazon_awssdk_s3",
         "@maven//:software_amazon_awssdk_sdk_core",
-        "@pcit_mbs//java/com/google/mbs:certmanagement",
-        "@pcit_mbs//java/com/google/mbs:dummy_cert_provider",
+        "@pcit_mbs//java/com/google/mbs",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )
 
@@ -108,5 +111,6 @@ java_test(
         "@maven//:com_google_truth_truth",
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )

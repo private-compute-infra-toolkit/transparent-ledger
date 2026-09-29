@@ -19,6 +19,7 @@ package com.google.tledger.adapters.signature;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
+import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.SignatureRecord;
 import java.security.InvalidKeyException;
@@ -26,6 +27,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,6 +38,7 @@ public class RsaEntrySignerTest {
 
   private RsaEntrySigner rsaEntrySigner;
   private KeyPair testRsaKeyPair;
+  private AtomicReference<MeasurementBoundCertificate> certificateRef;
 
   @Before
   public void setUp() throws Exception {
@@ -43,7 +46,10 @@ public class RsaEntrySignerTest {
     keyGen.initialize(2048);
     testRsaKeyPair = keyGen.generateKeyPair();
 
-    rsaEntrySigner = new RsaEntrySigner(testRsaKeyPair.getPrivate());
+    certificateRef =
+        new AtomicReference<>(
+            new MeasurementBoundCertificate(null, testRsaKeyPair.getPrivate(), null));
+    rsaEntrySigner = new RsaEntrySigner(certificateRef::get);
   }
 
   private boolean verifySignature(ByteString content, ByteString signature, PublicKey publicKey)
@@ -90,7 +96,9 @@ public class RsaEntrySignerTest {
     KeyPairGenerator dsaKeyGen = KeyPairGenerator.getInstance("DSA");
     dsaKeyGen.initialize(1024);
     KeyPair dsaKeyPair = dsaKeyGen.generateKeyPair();
-    RsaEntrySigner dsaSigner = new RsaEntrySigner(dsaKeyPair.getPrivate());
+    RsaEntrySigner dsaSigner =
+        new RsaEntrySigner(
+            () -> new MeasurementBoundCertificate(null, dsaKeyPair.getPrivate(), null));
 
     ByteString content = ByteString.copyFromUtf8("Another Test Content");
 
@@ -98,5 +106,25 @@ public class RsaEntrySignerTest {
         assertThrows(IllegalStateException.class, () -> dsaSigner.sign(content));
 
     assertThat(exception).hasCauseThat().isInstanceOf(InvalidKeyException.class);
+  }
+
+  @Test
+  public void sign_dynamicKeyRotation_usesNewKey() throws Exception {
+    ByteString content = ByteString.copyFromUtf8("Rotation Content");
+
+    SignatureRecord firstRecord = rsaEntrySigner.sign(content);
+    assertThat(verifySignature(content, firstRecord.signature(), testRsaKeyPair.getPublic()))
+        .isTrue();
+
+    // Rotate key
+    KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+    keyGen.initialize(2048);
+    KeyPair newKeyPair = keyGen.generateKeyPair();
+    certificateRef.set(new MeasurementBoundCertificate(null, newKeyPair.getPrivate(), null));
+
+    SignatureRecord secondRecord = rsaEntrySigner.sign(content);
+    assertThat(verifySignature(content, secondRecord.signature(), newKeyPair.getPublic())).isTrue();
+    assertThat(verifySignature(content, secondRecord.signature(), testRsaKeyPair.getPublic()))
+        .isFalse();
   }
 }

@@ -24,7 +24,8 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.qualifier.MbsRoot;
+import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.annotations.LedgerBucketName;
@@ -43,7 +44,6 @@ import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.time.Duration;
@@ -79,6 +79,8 @@ public class ServerS3IntegrationTest {
 
   private TransparentLedgerServiceGrpc.TransparentLedgerServiceBlockingStub tledgerClient;
   private TLedgerServer tledgerServer;
+  private TransparentLedgerGrpcHandler handler;
+  private PrometheusMeterRegistry meterRegistry;
   public static LocalStackContainer localstack =
       new LocalStackContainer(DockerImageName.parse("localstack/localstack:4.14.0"))
           .withServices(LocalStackContainer.Service.S3)
@@ -180,7 +182,11 @@ public class ServerS3IntegrationTest {
                     new TLedgerModule(
                         args,
                         new AwsInstanceMetadata(
-                            localstack.getRegion(), AWS_ACCOUNT_ID, "testenv", "testdomain")))
+                            localstack.getRegion(),
+                            AWS_ACCOUNT_ID,
+                            "testenv",
+                            "testdomain",
+                            "i-testinstance")))
                 .with(
                     new AbstractModule() {
                       @Override
@@ -189,16 +195,20 @@ public class ServerS3IntegrationTest {
                             .annotatedWith(LedgerBucketName.class)
                             .toInstance(bucketName);
                         bind(S3Client.class).toInstance(s3ClientToUse);
-                        bind(PrivateKey.class)
-                            .annotatedWith(MbsRoot.class)
-                            .toInstance(testRsaKeyPair.getPrivate());
+                        bind(MeasurementBoundCertificateProvider.class)
+                            .toInstance(
+                                () ->
+                                    new MeasurementBoundCertificate(
+                                        null, testRsaKeyPair.getPrivate(), null));
                       }
                     }));
 
-    TransparentLedgerGrpcHandler handler = injector.getInstance(TransparentLedgerGrpcHandler.class);
-    PrometheusMeterRegistry meterRegistry = injector.getInstance(PrometheusMeterRegistry.class);
+    this.handler = injector.getInstance(TransparentLedgerGrpcHandler.class);
+    this.meterRegistry = injector.getInstance(PrometheusMeterRegistry.class);
+    MeasurementBoundCertificateProvider certProvider =
+        injector.getInstance(MeasurementBoundCertificateProvider.class);
 
-    tledgerServer = new TLedgerServer(0, handler, meterRegistry);
+    tledgerServer = new TLedgerServer(0, handler, meterRegistry, certProvider);
     tledgerServer.start().join();
 
     tledgerClient =
@@ -379,5 +389,35 @@ public class ServerS3IntegrationTest {
     String content = response.contentUtf8();
     assertThat(content).contains("tledger_server");
     assertThat(content).contains("armeria_server_connections");
+  }
+
+  @Test
+  public void healthz_returnsOkWhenServingAndCertificatePresent() throws Exception {
+    startServerAndSetupClient(BUCKET_NAME);
+
+    WebClient client = WebClient.of("http://localhost:" + tledgerServer.port());
+    AggregatedHttpResponse response = client.get("/healthz").aggregate().join();
+
+    assertThat(response.status()).isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  public void healthz_returnsServiceUnavailableWhenCertificateUninitialized() throws Exception {
+    startServerAndSetupClient(BUCKET_NAME);
+
+    MeasurementBoundCertificateProvider uninitializedProvider =
+        () -> {
+          throw new IllegalStateException("Certificate uninitialized");
+        };
+    TLedgerServer uninitializedServer =
+        new TLedgerServer(0, handler, meterRegistry, uninitializedProvider);
+    uninitializedServer.start().join();
+    try {
+      WebClient client = WebClient.of("http://localhost:" + uninitializedServer.port());
+      AggregatedHttpResponse response = client.get("/healthz").aggregate().join();
+      assertThat(response.status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    } finally {
+      uninitializedServer.stop().join();
+    }
   }
 }

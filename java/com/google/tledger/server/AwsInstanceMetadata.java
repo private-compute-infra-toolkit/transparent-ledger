@@ -18,4 +18,4 @@ package com.google.tledger.server;
 
 /** Immutable carrier for IMDS data. */
 public record AwsInstanceMetadata(
-    String region, String accountId, String environment, String domain) {}
+    String region, String accountId, String environment, String domain, String instanceId) {}

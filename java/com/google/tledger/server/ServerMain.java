@@ -21,6 +21,8 @@ import com.beust.jcommander.ParameterException;
 import com.google.common.flogger.FluentLogger;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.mbs.domain.CertificateMonitor;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 public class ServerMain {
@@ -56,8 +58,14 @@ public class ServerMain {
         injector.getInstance(CertificateValidityReporter.class);
     validityReporter.startAsync();
 
+    CertificateMonitor certMonitor = injector.getInstance(CertificateMonitor.class);
+    certMonitor.start();
+
+    MeasurementBoundCertificateProvider certProvider =
+        injector.getInstance(MeasurementBoundCertificateProvider.class);
+
     int port = 50051;
-    TLedgerServer tledgerServer = new TLedgerServer(port, service, meterRegistry);
+    TLedgerServer tledgerServer = new TLedgerServer(port, service, meterRegistry, certProvider);
 
     tledgerServer.start().join();
 
@@ -68,6 +76,7 @@ public class ServerMain {
                   System.err.println("*** shutting down Armeria server since JVM is shutting down");
                   tledgerServer.stop().join();
                   validityReporter.stopAsync();
+                  certMonitor.stop();
                   System.err.println("*** server shut down");
                 }));
 

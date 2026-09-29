@@ -17,6 +17,7 @@
 package com.google.tledger.server;
 
 import com.google.common.flogger.FluentLogger;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.linecorp.armeria.common.HttpResponse;
 import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.common.grpc.GrpcMeterIdPrefixFunction;
@@ -38,11 +39,16 @@ public class TLedgerServer {
 
   private final Server server;
   private final HealthManager healthManager;
+  private final MeasurementBoundCertificateProvider certificateProvider;
   private final int port;
 
   public TLedgerServer(
-      int port, TransparentLedgerGrpcHandler service, PrometheusMeterRegistry meterRegistry) {
+      int port,
+      TransparentLedgerGrpcHandler service,
+      PrometheusMeterRegistry meterRegistry,
+      MeasurementBoundCertificateProvider certificateProvider) {
     this.port = port;
+    this.certificateProvider = certificateProvider;
     this.healthManager = new HealthManager();
 
     final GrpcService grpcService =
@@ -64,7 +70,7 @@ public class TLedgerServer {
             .service(
                 "/healthz",
                 (ctx, req) -> {
-                  if (healthManager.isServing()) {
+                  if (isHealthy()) {
                     return HttpResponse.of(HttpStatus.OK);
                   }
                   return HttpResponse.of(HttpStatus.SERVICE_UNAVAILABLE);
@@ -100,6 +106,24 @@ public class TLedgerServer {
 
   public Server getServer() {
     return server;
+  }
+
+  // In MBS 0.9.0, getCertificate() is decoupled from reloads and throws IllegalStateException
+  // if invoked prior to initial root certificate loading. Healthcheck validates both active
+  // server lifecycle and presence of valid cryptographic material.
+  boolean isHealthy() {
+    if (!healthManager.isServing()) {
+      return false;
+    }
+    try {
+      return certificateProvider.getCertificate() != null;
+    } catch (IllegalStateException e) {
+      logger.atFine().log("Healthcheck failed: certificate is not available yet.");
+      return false;
+    } catch (Exception e) {
+      logger.atWarning().withCause(e).log("Healthcheck failed with unexpected exception");
+      return false;
+    }
   }
 
   public static class HealthManager {

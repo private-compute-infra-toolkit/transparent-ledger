@@ -36,7 +36,8 @@ public class AwsResourceNamesProviderTest {
     when(args.getMbsKmsKeySuffix()).thenReturn("test-kms-key-suffix");
 
     AwsInstanceMetadata metadata =
-        new AwsInstanceMetadata("us-west-2", "123456789012", "testenv", "testdomain");
+        new AwsInstanceMetadata(
+            "us-west-2", "123456789012", "testenv", "testdomain", "i-testinstance");
     AwsResourceNamesProvider provider = new AwsResourceNamesProvider(args, metadata);
 
     AwsResourceNames names = provider.getRecord();

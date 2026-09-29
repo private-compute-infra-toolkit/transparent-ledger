@@ -27,6 +27,6 @@ java_library(
         "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:jakarta_inject_jakarta_inject_api",
-        "@pcit_mbs//java/com/google/mbs:certmanagement",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )

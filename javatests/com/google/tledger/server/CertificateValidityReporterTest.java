@@ -17,14 +17,18 @@
 package com.google.tledger.server;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.tledger.domain.metric.Metrics;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -47,7 +51,9 @@ public class CertificateValidityReporterTest {
 
   @Before
   public void setUp() {
-    reporter = new CertificateValidityReporter(mockCertificate, mockMetrics);
+    reporter =
+        new CertificateValidityReporter(
+            () -> new MeasurementBoundCertificate(mockCertificate, null, null), mockMetrics);
   }
 
   @Test
@@ -82,5 +88,34 @@ public class CertificateValidityReporterTest {
 
     // Assert
     verify(mockMetrics).setRootCertificateValidity(Duration.ZERO);
+  }
+
+  @Test
+  public void runOneIteration_dynamicCertificateRotation_reportsUpdatedValidity() throws Exception {
+    X509Certificate firstCert = mock(X509Certificate.class);
+    X509Certificate secondCert = mock(X509Certificate.class);
+    AtomicReference<MeasurementBoundCertificate> certRef =
+        new AtomicReference<>(new MeasurementBoundCertificate(firstCert, null, null));
+    CertificateValidityReporter dynamicReporter =
+        new CertificateValidityReporter(certRef::get, mockMetrics);
+
+    Instant now = Instant.now();
+    when(firstCert.getNotAfter()).thenReturn(Date.from(now.plus(Duration.ofDays(10))));
+    when(secondCert.getNotAfter()).thenReturn(Date.from(now.plus(Duration.ofDays(30))));
+
+    dynamicReporter.runOneIteration();
+
+    ArgumentCaptor<Duration> durationCaptor = ArgumentCaptor.forClass(Duration.class);
+    verify(mockMetrics).setRootCertificateValidity(durationCaptor.capture());
+    assertThat(durationCaptor.getValue().toSeconds())
+        .isAtLeast(Duration.ofDays(10).minusMinutes(1).toSeconds());
+
+    // Rotate to second certificate
+    certRef.set(new MeasurementBoundCertificate(secondCert, null, null));
+    dynamicReporter.runOneIteration();
+
+    verify(mockMetrics, times(2)).setRootCertificateValidity(durationCaptor.capture());
+    assertThat(durationCaptor.getValue().toSeconds())
+        .isAtLeast(Duration.ofDays(30).minusMinutes(1).toSeconds());
   }
 }

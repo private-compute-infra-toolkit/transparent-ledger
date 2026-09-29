@@ -38,7 +38,8 @@
               "label_matcher": "^tledger$",
               "dimensions": [[]],
               "metric_selectors": [
-                "^tledger_root_certificate_validity_seconds$"
+                "^tledger_root_certificate_validity_seconds$",
+                "^tledger_certificate_reload_failed$"
               ]
             }
           ]

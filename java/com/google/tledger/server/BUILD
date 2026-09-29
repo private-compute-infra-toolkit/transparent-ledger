@@ -80,14 +80,9 @@ java_library(
         "@maven//:software_amazon_awssdk_regions",
         "@maven//:software_amazon_awssdk_s3",
         "@maven//:software_amazon_awssdk_sdk_core",
-        "@pcit_mbs//java/com/google/kmsclient",
-        "@pcit_mbs//java/com/google/kmsclient/aws",
-        "@pcit_mbs//java/com/google/mbs:certmanagement",
+        "@pcit_mbs//java/com/google/mbs",
         "@pcit_mbs//java/com/google/mbs:dummy_cert_provider",
-        "@pcit_mbs//java/com/google/mbs:module",
-        "@pcit_mbs//java/com/google/mbs/attestationcollection",
-        "@pcit_mbs//java/com/google/mbs/attestationcollection/aws",
-        "@pcit_mbs//java/com/google/platform/aws/nsm",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )
 
@@ -129,5 +124,6 @@ java_binary(
         "@maven//:io_grpc_grpc_netty_shaded",
         "@maven//:io_micrometer_micrometer_core",
         "@maven//:io_micrometer_micrometer_registry_prometheus",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )

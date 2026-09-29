@@ -24,6 +24,7 @@ import com.google.mbs.DummyMbsModule;
 import com.google.mbs.MbsCertificateFactory;
 import com.google.mbs.MbsModule;
 import com.google.mbs.qualifier.AttestationUserData;
+import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
 import com.google.mbs.qualifier.PrivateBackupBucket;
 import com.google.mbs.qualifier.PublicBackupBucket;
@@ -81,7 +82,6 @@ public class TLedgerModule extends AbstractModule {
         .toInstance(awsResourceNames.ledgerBucketName());
     bind(EntrySigner.class).to(RsaEntrySigner.class);
     bind(Metrics.class).to(SystemMetrics.class);
-    bind(com.google.mbs.Metrics.class).to(SystemMetrics.class);
 
     if (tLedgerArgs.isLocalMode()) {
       logger.atInfo().log("Installing DummyMbsModule for local mode");
@@ -89,6 +89,7 @@ public class TLedgerModule extends AbstractModule {
     } else {
       logger.atInfo().log("Installing MbsModule with AWS region: %s", awsInstanceMetadata.region());
       install(new MbsModule(awsInstanceMetadata.region()));
+      bind(com.google.mbs.domain.Metrics.class).to(SystemMetrics.class);
       bind(String.class).annotatedWith(KmsKeyArn.class).toInstance(awsResourceNames.kmsKeyArn());
       bind(String.class)
           .annotatedWith(PublicBackupBucket.class)
@@ -96,6 +97,9 @@ public class TLedgerModule extends AbstractModule {
       bind(String.class)
           .annotatedWith(PrivateBackupBucket.class)
           .toInstance(awsResourceNames.keyBackupBucketName());
+      bind(String.class)
+          .annotatedWith(InstanceId.class)
+          .toInstance(awsInstanceMetadata.instanceId());
     }
   }
 

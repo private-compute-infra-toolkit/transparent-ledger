@@ -18,6 +18,7 @@ package com.google.tledger.adapters;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.mbs.domain.Metrics.ReloadStatus;
 import com.google.tledger.domain.metric.Status;
 import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
@@ -90,5 +91,19 @@ public class SystemMetricsTest {
 
     systemMetrics.setRootCertificateValidity(Duration.ofMinutes(10));
     assertThat(gauge.value()).isEqualTo(600.0);
+  }
+
+  @Test
+  public void setReloadStatus_registersGaugeAndReflectsStatus() {
+    io.micrometer.core.instrument.Gauge gauge =
+        registry.get("tledger.certificate_reload_failed").gauge();
+    assertThat(gauge).isNotNull();
+    assertThat(gauge.value()).isEqualTo(0.0);
+
+    systemMetrics.setReloadStatus(ReloadStatus.FAILURE);
+    assertThat(gauge.value()).isEqualTo(1.0);
+
+    systemMetrics.setReloadStatus(ReloadStatus.SUCCESS);
+    assertThat(gauge.value()).isEqualTo(0.0);
   }
 }

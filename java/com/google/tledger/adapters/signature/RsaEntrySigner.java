@@ -18,7 +18,7 @@ package com.google.tledger.adapters.signature;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.mbs.qualifier.MbsRoot;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.SignatureRecord;
 import com.google.tledger.domain.ports.EntrySigner;
@@ -32,11 +32,12 @@ import java.security.SignatureException;
 public class RsaEntrySigner implements EntrySigner {
   private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
 
-  private final PrivateKey privateKey;
+  private final MeasurementBoundCertificateProvider certificateProvider;
 
   @Inject
-  RsaEntrySigner(@MbsRoot PrivateKey privateKey) {
-    this.privateKey = checkNotNull(privateKey, "Private key cannot be null.");
+  RsaEntrySigner(MeasurementBoundCertificateProvider certificateProvider) {
+    this.certificateProvider =
+        checkNotNull(certificateProvider, "Certificate provider cannot be null.");
   }
 
   public SignatureRecord sign(ByteString content) {
@@ -59,6 +60,7 @@ public class RsaEntrySigner implements EntrySigner {
 
   private void init(Signature signature) {
     try {
+      PrivateKey privateKey = certificateProvider.getCertificate().getPrivateKey();
       signature.initSign(privateKey);
     } catch (InvalidKeyException e) {
       throw new IllegalStateException("The key returned by MBS should always be valid!", e);

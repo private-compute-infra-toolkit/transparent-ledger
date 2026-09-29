@@ -23,7 +23,8 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.qualifier.MbsRoot;
+import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.MeasurementBoundCertificateProvider;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.EntryIdProvider;
@@ -34,7 +35,6 @@ import com.google.tledger.server.TLedgerModule;
 import com.google.tledger.testing.InMemoryLedger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.util.Optional;
@@ -81,16 +81,22 @@ public class TLedgerServiceTest {
                     new TLedgerModule(
                         args,
                         new AwsInstanceMetadata(
-                            "us-east-1", "123456789012", "testenv", "testdomain")))
+                            "us-east-1",
+                            "123456789012",
+                            "testenv",
+                            "testdomain",
+                            "i-testinstance")))
                 .with(
                     new AbstractModule() {
                       @Override
                       protected void configure() {
                         bind(EntryIdProvider.class).toInstance(mockIdProvider);
                         bind(Ledger.class).toInstance(inMemoryLedger);
-                        bind(PrivateKey.class)
-                            .annotatedWith(MbsRoot.class)
-                            .toInstance(testRsaKeyPair.getPrivate());
+                        bind(MeasurementBoundCertificateProvider.class)
+                            .toInstance(
+                                () ->
+                                    new MeasurementBoundCertificate(
+                                        null, testRsaKeyPair.getPrivate(), null));
                       }
                     }));
     service = injector.getInstance(TLedgerService.class);

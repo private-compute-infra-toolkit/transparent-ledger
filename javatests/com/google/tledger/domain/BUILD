@@ -32,6 +32,6 @@ java_test(
         "@maven//:com_google_truth_truth",
         "@maven//:junit_junit",
         "@maven//:org_mockito_mockito_core",
-        "@pcit_mbs//java/com/google/mbs:certmanagement",
+        "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )
