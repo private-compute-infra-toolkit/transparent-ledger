@@ -20,6 +20,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.TrustPackage;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.SignatureRecord;
 import java.security.InvalidKeyException;
@@ -27,6 +28,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,7 +51,8 @@ public class RsaEntrySignerTest {
     certificateRef =
         new AtomicReference<>(
             new MeasurementBoundCertificate(null, testRsaKeyPair.getPrivate(), null));
-    rsaEntrySigner = new RsaEntrySigner(certificateRef::get);
+    rsaEntrySigner =
+        new RsaEntrySigner(() -> new TrustPackage(List.of(certificateRef.get()), List.of()));
   }
 
   private boolean verifySignature(ByteString content, ByteString signature, PublicKey publicKey)
@@ -98,7 +101,10 @@ public class RsaEntrySignerTest {
     KeyPair dsaKeyPair = dsaKeyGen.generateKeyPair();
     RsaEntrySigner dsaSigner =
         new RsaEntrySigner(
-            () -> new MeasurementBoundCertificate(null, dsaKeyPair.getPrivate(), null));
+            () ->
+                new TrustPackage(
+                    List.of(new MeasurementBoundCertificate(null, dsaKeyPair.getPrivate(), null)),
+                    List.of()));
 
     ByteString content = ByteString.copyFromUtf8("Another Test Content");
 

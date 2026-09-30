@@ -26,6 +26,7 @@ import com.google.inject.Injector;
 import com.google.inject.util.Modules;
 import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.TrustPackage;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.annotations.LedgerBucketName;
@@ -198,8 +199,11 @@ public class ServerS3IntegrationTest {
                         bind(MeasurementBoundCertificateProvider.class)
                             .toInstance(
                                 () ->
-                                    new MeasurementBoundCertificate(
-                                        null, testRsaKeyPair.getPrivate(), null));
+                                    new TrustPackage(
+                                        List.of(
+                                            new MeasurementBoundCertificate(
+                                                null, testRsaKeyPair.getPrivate(), null)),
+                                        List.of()));
                       }
                     }));
 

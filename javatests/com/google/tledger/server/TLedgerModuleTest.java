@@ -179,12 +179,12 @@ public class TLedgerModuleTest {
 
     // In MBS 0.9.0+, getCertificate() is decoupled from reloadCertificate() and throws
     // IllegalStateException until the certificate is loaded or generated.
-    assertThrows(IllegalStateException.class, provider::getCertificate);
+    assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
     reloader.reloadCertificate();
-    assertThat(provider.getCertificate()).isNotNull();
-    assertThat(provider.getCertificate().getCertificate()).isNotNull();
-    assertThat(provider.getCertificate().getPrivateKey()).isNotNull();
+    assertThat(provider.getActiveTrustPackage().bundles().get(0)).isNotNull();
+    assertThat(provider.getActiveTrustPackage().bundles().get(0).getCertificate()).isNotNull();
+    assertThat(provider.getActiveTrustPackage().bundles().get(0).getPrivateKey()).isNotNull();
   }
 
   @Test

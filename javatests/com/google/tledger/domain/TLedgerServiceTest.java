@@ -25,6 +25,7 @@ import com.google.inject.Injector;
 import com.google.inject.util.Modules;
 import com.google.mbs.domain.MeasurementBoundCertificate;
 import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.TrustPackage;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.EntryIdProvider;
@@ -37,6 +38,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.util.List;
 import java.util.Optional;
 import org.junit.Before;
 import org.junit.Rule;
@@ -95,8 +97,11 @@ public class TLedgerServiceTest {
                         bind(MeasurementBoundCertificateProvider.class)
                             .toInstance(
                                 () ->
-                                    new MeasurementBoundCertificate(
-                                        null, testRsaKeyPair.getPrivate(), null));
+                                    new TrustPackage(
+                                        List.of(
+                                            new MeasurementBoundCertificate(
+                                                null, testRsaKeyPair.getPrivate(), null)),
+                                        List.of()));
                       }
                     }));
     service = injector.getInstance(TLedgerService.class);

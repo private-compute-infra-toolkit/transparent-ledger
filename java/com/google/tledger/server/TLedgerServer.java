@@ -116,7 +116,7 @@ public class TLedgerServer {
       return false;
     }
     try {
-      return certificateProvider.getCertificate() != null;
+      return certificateProvider.getActiveTrustPackage().bundles().get(0) != null;
     } catch (IllegalStateException e) {
       logger.atFine().log("Healthcheck failed: certificate is not available yet.");
       return false;

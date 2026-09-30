@@ -44,7 +44,8 @@ public class CertificateValidityReporter extends AbstractScheduledService {
   @Override
   protected void runOneIteration() {
     try {
-      X509Certificate certificate = certificateProvider.getCertificate().getCertificate();
+      X509Certificate certificate =
+          certificateProvider.getActiveTrustPackage().bundles().get(0).getCertificate();
       Instant expiry = certificate.getNotAfter().toInstant();
       Instant now = Instant.now();
       Duration remaining = Duration.between(now, expiry);

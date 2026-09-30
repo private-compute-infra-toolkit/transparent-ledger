@@ -16,8 +16,8 @@
 
 package com.google.mbs.domain;
 
-/** Exception thrown when a requested MBS key backup artifact is not found in storage. */
-public class KeyBackupNotFoundException extends Exception {
+/** Thrown when the backup storage is pristine: not a single artifact exists. */
+public class KeyBackupNotFoundException extends KeyBackupStorageException {
 
   public KeyBackupNotFoundException(String message) {
     super(message);

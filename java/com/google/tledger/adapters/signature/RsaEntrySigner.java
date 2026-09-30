@@ -60,7 +60,8 @@ public class RsaEntrySigner implements EntrySigner {
 
   private void init(Signature signature) {
     try {
-      PrivateKey privateKey = certificateProvider.getCertificate().getPrivateKey();
+      PrivateKey privateKey =
+          certificateProvider.getActiveTrustPackage().bundles().get(0).getPrivateKey();
       signature.initSign(privateKey);
     } catch (InvalidKeyException e) {
       throw new IllegalStateException("The key returned by MBS should always be valid!", e);

@@ -23,11 +23,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.TrustPackage;
 import com.google.tledger.domain.metric.Metrics;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Rule;
@@ -53,7 +55,11 @@ public class CertificateValidityReporterTest {
   public void setUp() {
     reporter =
         new CertificateValidityReporter(
-            () -> new MeasurementBoundCertificate(mockCertificate, null, null), mockMetrics);
+            () ->
+                new TrustPackage(
+                    List.of(new MeasurementBoundCertificate(mockCertificate, null, null)),
+                    List.of()),
+            mockMetrics);
   }
 
   @Test
@@ -97,7 +103,8 @@ public class CertificateValidityReporterTest {
     AtomicReference<MeasurementBoundCertificate> certRef =
         new AtomicReference<>(new MeasurementBoundCertificate(firstCert, null, null));
     CertificateValidityReporter dynamicReporter =
-        new CertificateValidityReporter(certRef::get, mockMetrics);
+        new CertificateValidityReporter(
+            () -> new TrustPackage(List.of(certRef.get()), List.of()), mockMetrics);
 
     Instant now = Instant.now();
     when(firstCert.getNotAfter()).thenReturn(Date.from(now.plus(Duration.ofDays(10))));
