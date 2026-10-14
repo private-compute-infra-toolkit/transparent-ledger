@@ -424,4 +424,11 @@ public class ServerS3IntegrationTest {
       uninitializedServer.stop().join();
     }
   }
+
+  @Test
+  public void server_configuresIdleTimeoutGreaterThanAlbIdleTimeout() {
+    // Verify Armeria idle timeout is configured to 65 seconds (65000 ms) to exceed ALB's 60s idle
+    // timeout.
+    assertThat(tledgerServer.getServer().config().idleTimeoutMillis()).isEqualTo(65000L);
+  }
 }

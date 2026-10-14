@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.9.0 (2026-10-14)
+
+
+### Bug Fixes
+
+* (server) set Armeria idle timeout to 65s to prevent ALB 502s
+
 ## 0.8.0 (2026-09-30)
 
 
