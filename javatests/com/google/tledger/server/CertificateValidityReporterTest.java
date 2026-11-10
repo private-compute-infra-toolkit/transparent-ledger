@@ -22,9 +22,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.TrustPackage;
 import com.google.tledger.domain.metric.Metrics;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +49,9 @@ public class CertificateValidityReporterTest {
 
   @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
+  private static final AttestationToken DUMMY_TOKEN =
+      AttestationToken.fromBytes("token".getBytes());
+
   @Mock private X509Certificate mockCertificate;
   @Mock private Metrics mockMetrics;
 
@@ -57,7 +63,11 @@ public class CertificateValidityReporterTest {
         new CertificateValidityReporter(
             () ->
                 new TrustPackage(
-                    List.of(new MeasurementBoundCertificate(mockCertificate, null, null)),
+                    List.of(
+                        new SelfSignedBundleWithEpoch(
+                            0,
+                            new SelfSignedBundle(
+                                mockCertificate, mock(PrivateKey.class), DUMMY_TOKEN))),
                     List.of()),
             mockMetrics);
   }
@@ -100,11 +110,14 @@ public class CertificateValidityReporterTest {
   public void runOneIteration_dynamicCertificateRotation_reportsUpdatedValidity() throws Exception {
     X509Certificate firstCert = mock(X509Certificate.class);
     X509Certificate secondCert = mock(X509Certificate.class);
-    AtomicReference<MeasurementBoundCertificate> certRef =
-        new AtomicReference<>(new MeasurementBoundCertificate(firstCert, null, null));
+    AtomicReference<SelfSignedBundle> bundleRef =
+        new AtomicReference<>(new SelfSignedBundle(firstCert, mock(PrivateKey.class), DUMMY_TOKEN));
     CertificateValidityReporter dynamicReporter =
         new CertificateValidityReporter(
-            () -> new TrustPackage(List.of(certRef.get()), List.of()), mockMetrics);
+            () ->
+                new TrustPackage(
+                    List.of(new SelfSignedBundleWithEpoch(0, bundleRef.get())), List.of()),
+            mockMetrics);
 
     Instant now = Instant.now();
     when(firstCert.getNotAfter()).thenReturn(Date.from(now.plus(Duration.ofDays(10))));
@@ -118,7 +131,7 @@ public class CertificateValidityReporterTest {
         .isAtLeast(Duration.ofDays(10).minusMinutes(1).toSeconds());
 
     // Rotate to second certificate
-    certRef.set(new MeasurementBoundCertificate(secondCert, null, null));
+    bundleRef.set(new SelfSignedBundle(secondCert, mock(PrivateKey.class), DUMMY_TOKEN));
     dynamicReporter.runOneIteration();
 
     verify(mockMetrics, times(2)).setRootCertificateValidity(durationCaptor.capture());

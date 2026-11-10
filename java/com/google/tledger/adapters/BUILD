@@ -29,6 +29,7 @@ java_library(
         "//java/com/google/tledger/domain/model",
         "//java/com/google/tledger/proto:entry_java_proto",
         "@maven//:com_google_flogger_flogger",
+        "@maven//:com_google_guava_guava",
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:io_micrometer_micrometer_core",
         "@maven//:io_micrometer_micrometer_registry_prometheus",

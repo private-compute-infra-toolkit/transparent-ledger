@@ -25,6 +25,7 @@ public class EntryMapper {
         .setRawEntry(entry.rawEntry())
         .setSignature(entry.signature())
         .setSigningAlgorithm(entry.signingAlgorithm())
+        .setKeyId(entry.keyId())
         .build();
   }
 
@@ -33,6 +34,7 @@ public class EntryMapper {
         protoEntry.getName(),
         protoEntry.getRawEntry(),
         protoEntry.getSignature(),
-        protoEntry.getSigningAlgorithm());
+        protoEntry.getSigningAlgorithm(),
+        protoEntry.getKeyId());
   }
 }

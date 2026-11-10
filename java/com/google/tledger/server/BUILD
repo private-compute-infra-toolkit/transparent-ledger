@@ -82,6 +82,7 @@ java_library(
         "@maven//:software_amazon_awssdk_sdk_core",
         "@pcit_mbs//java/com/google/mbs",
         "@pcit_mbs//java/com/google/mbs:dummy_cert_provider",
+        "@pcit_mbs//java/com/google/mbs/adapters",
         "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )

@@ -18,7 +18,7 @@ package com.google.tledger.server;
 
 import com.google.common.flogger.FluentLogger;
 import com.google.common.util.concurrent.AbstractScheduledService;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.google.tledger.domain.metric.Metrics;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -31,12 +31,11 @@ import java.time.Instant;
 public class CertificateValidityReporter extends AbstractScheduledService {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
-  private final MeasurementBoundCertificateProvider certificateProvider;
+  private final TrustPackageProvider certificateProvider;
   private final Metrics metrics;
 
   @Inject
-  public CertificateValidityReporter(
-      MeasurementBoundCertificateProvider certificateProvider, Metrics metrics) {
+  public CertificateValidityReporter(TrustPackageProvider certificateProvider, Metrics metrics) {
     this.certificateProvider = certificateProvider;
     this.metrics = metrics;
   }
@@ -45,7 +44,12 @@ public class CertificateValidityReporter extends AbstractScheduledService {
   protected void runOneIteration() {
     try {
       X509Certificate certificate =
-          certificateProvider.getActiveTrustPackage().bundles().get(0).getCertificate();
+          certificateProvider
+              .getActiveTrustPackage()
+              .selfSignedBundles()
+              .get(0)
+              .bundle()
+              .certificate();
       Instant expiry = certificate.getNotAfter().toInstant();
       Instant now = Instant.now();
       Duration remaining = Duration.between(now, expiry);

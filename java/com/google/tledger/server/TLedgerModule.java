@@ -16,12 +16,14 @@
 
 package com.google.tledger.server;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.flogger.FluentLogger;
 import com.google.gson.Gson;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
-import com.google.mbs.MbsCertificateFactory;
 import com.google.mbs.MbsModule;
+import com.google.mbs.adapters.DefaultSelfSignedCertificateFactory;
+import com.google.mbs.domain.SelfSignedCertificateFactory;
 import com.google.mbs.dummy.DummyMbsModule;
 import com.google.mbs.qualifier.AttestationUserData;
 import com.google.mbs.qualifier.InstanceId;
@@ -45,8 +47,6 @@ import io.micrometer.prometheusmetrics.PrometheusConfig;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import jakarta.inject.Singleton;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.GeneralName;
@@ -57,6 +57,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 
 public class TLedgerModule extends AbstractModule {
   private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+  private static final ImmutableList<String> ALLOWED_METER_PREFIXES =
+      ImmutableList.of("tledger.", "armeria.server.connections");
   private final TLedgerArgs tLedgerArgs;
   private final AwsInstanceMetadata awsInstanceMetadata;
   private final AwsResourceNames awsResourceNames;
@@ -113,7 +115,7 @@ public class TLedgerModule extends AbstractModule {
 
   @Provides
   @Singleton
-  MbsCertificateFactory provideMbsCertificateFactory() {
+  SelfSignedCertificateFactory provideSelfSignedCertificateFactory() {
     String env = awsInstanceMetadata.environment();
     String domain = awsInstanceMetadata.domain();
     String operatorRole = awsInstanceMetadata.accountId();
@@ -126,12 +128,11 @@ public class TLedgerModule extends AbstractModule {
     Optional<GeneralNames> san = Optional.of(new GeneralNames(uriSan));
     logger.atInfo().log("Setting root certificate Subject Alternative Name (SAN): %s", spiffeId);
 
-    return MbsCertificateFactory.createSelfSignedCertificatesFactory(
-        new MbsCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
+    return new DefaultSelfSignedCertificateFactory(
+        new DefaultSelfSignedCertificateFactory.CertSignatureSpec("RSA", 4096, "SHA256withRSA"),
         new X500Name("C=US, O=Google LLC, CN=TLedger"),
-        Duration.between(Instant.now(), Instant.parse("2027-02-02T13:00:00Z")),
         san,
-        KeyUsage.digitalSignature);
+        KeyUsage.digitalSignature | KeyUsage.keyCertSign);
   }
 
   @Provides
@@ -172,9 +173,9 @@ public class TLedgerModule extends AbstractModule {
     PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
     registry
         .config()
-        .meterFilter(MeterFilter.acceptNameStartsWith("tledger."))
-        .meterFilter(MeterFilter.acceptNameStartsWith("armeria.server.connections"))
-        .meterFilter(MeterFilter.deny());
+        .meterFilter(
+            MeterFilter.denyUnless(
+                id -> ALLOWED_METER_PREFIXES.stream().anyMatch(id.getName()::startsWith)));
     return registry;
   }
 }

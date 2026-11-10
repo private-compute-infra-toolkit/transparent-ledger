@@ -18,8 +18,11 @@ package com.google.tledger.adapters.signature;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
 
-import com.google.mbs.domain.MeasurementBoundCertificate;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.TrustPackage;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.SignatureRecord;
@@ -28,7 +31,9 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.cert.X509Certificate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 import org.junit.Test;
@@ -38,9 +43,15 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class RsaEntrySignerTest {
 
+  private static final AttestationToken DUMMY_TOKEN =
+      AttestationToken.fromBytes("token".getBytes());
+  private static final X509Certificate DUMMY_CERT = mock(X509Certificate.class);
+  private static final int INITIAL_EPOCH_ID = 5;
+
   private RsaEntrySigner rsaEntrySigner;
   private KeyPair testRsaKeyPair;
-  private AtomicReference<MeasurementBoundCertificate> certificateRef;
+  private AtomicReference<SelfSignedBundle> bundleRef;
+  private AtomicInteger epochRef;
 
   @Before
   public void setUp() throws Exception {
@@ -48,11 +59,16 @@ public class RsaEntrySignerTest {
     keyGen.initialize(2048);
     testRsaKeyPair = keyGen.generateKeyPair();
 
-    certificateRef =
+    bundleRef =
         new AtomicReference<>(
-            new MeasurementBoundCertificate(null, testRsaKeyPair.getPrivate(), null));
+            new SelfSignedBundle(DUMMY_CERT, testRsaKeyPair.getPrivate(), DUMMY_TOKEN));
+    epochRef = new AtomicInteger(INITIAL_EPOCH_ID);
     rsaEntrySigner =
-        new RsaEntrySigner(() -> new TrustPackage(List.of(certificateRef.get()), List.of()));
+        new RsaEntrySigner(
+            () ->
+                new TrustPackage(
+                    List.of(new SelfSignedBundleWithEpoch(epochRef.get(), bundleRef.get())),
+                    List.of()));
   }
 
   private boolean verifySignature(ByteString content, ByteString signature, PublicKey publicKey)
@@ -72,6 +88,7 @@ public class RsaEntrySignerTest {
     assertThat(record).isNotNull();
     assertThat(record.algorithm()).isEqualTo("SHA256withRSA");
     assertThat(record.signature()).isNotEmpty();
+    assertThat(record.keyId()).isEqualTo(String.valueOf(INITIAL_EPOCH_ID));
 
     assertThat(verifySignature(content, record.signature(), testRsaKeyPair.getPublic())).isTrue();
   }
@@ -103,7 +120,11 @@ public class RsaEntrySignerTest {
         new RsaEntrySigner(
             () ->
                 new TrustPackage(
-                    List.of(new MeasurementBoundCertificate(null, dsaKeyPair.getPrivate(), null)),
+                    List.of(
+                        new SelfSignedBundleWithEpoch(
+                            0,
+                            new SelfSignedBundle(
+                                DUMMY_CERT, dsaKeyPair.getPrivate(), DUMMY_TOKEN))),
                     List.of()));
 
     ByteString content = ByteString.copyFromUtf8("Another Test Content");
@@ -126,9 +147,11 @@ public class RsaEntrySignerTest {
     KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
     keyGen.initialize(2048);
     KeyPair newKeyPair = keyGen.generateKeyPair();
-    certificateRef.set(new MeasurementBoundCertificate(null, newKeyPair.getPrivate(), null));
+    bundleRef.set(new SelfSignedBundle(DUMMY_CERT, newKeyPair.getPrivate(), DUMMY_TOKEN));
+    epochRef.set(INITIAL_EPOCH_ID + 1);
 
     SignatureRecord secondRecord = rsaEntrySigner.sign(content);
+    assertThat(secondRecord.keyId()).isEqualTo(String.valueOf(INITIAL_EPOCH_ID + 1));
     assertThat(verifySignature(content, secondRecord.signature(), newKeyPair.getPublic())).isTrue();
     assertThat(verifySignature(content, secondRecord.signature(), testRsaKeyPair.getPublic()))
         .isFalse();

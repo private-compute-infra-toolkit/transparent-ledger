@@ -18,7 +18,8 @@ package com.google.tledger.adapters.signature;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.SignatureRecord;
 import com.google.tledger.domain.ports.EntrySigner;
@@ -32,10 +33,10 @@ import java.security.SignatureException;
 public class RsaEntrySigner implements EntrySigner {
   private static final String SIGNATURE_ALGORITHM = "SHA256withRSA";
 
-  private final MeasurementBoundCertificateProvider certificateProvider;
+  private final TrustPackageProvider certificateProvider;
 
   @Inject
-  RsaEntrySigner(MeasurementBoundCertificateProvider certificateProvider) {
+  RsaEntrySigner(TrustPackageProvider certificateProvider) {
     this.certificateProvider =
         checkNotNull(certificateProvider, "Certificate provider cannot be null.");
   }
@@ -43,11 +44,17 @@ public class RsaEntrySigner implements EntrySigner {
   public SignatureRecord sign(ByteString content) {
     checkNotNull(content, "Content to be signed cannot be null.");
 
+    // Read the trust package once so the signing key and its key ID cannot diverge if the
+    // package is reloaded concurrently.
+    SelfSignedBundleWithEpoch signingBundle =
+        certificateProvider.getActiveTrustPackage().selfSignedBundles().get(0);
+
     Signature signature = getSignatureInstance();
-    init(signature);
+    init(signature, signingBundle.bundle().privateKey());
     ByteString signatureBytes = signContent(content, signature);
 
-    return new SignatureRecord(signatureBytes, SIGNATURE_ALGORITHM);
+    return new SignatureRecord(
+        signatureBytes, SIGNATURE_ALGORITHM, String.valueOf(signingBundle.epochId()));
   }
 
   private Signature getSignatureInstance() {
@@ -58,10 +65,8 @@ public class RsaEntrySigner implements EntrySigner {
     }
   }
 
-  private void init(Signature signature) {
+  private void init(Signature signature, PrivateKey privateKey) {
     try {
-      PrivateKey privateKey =
-          certificateProvider.getActiveTrustPackage().bundles().get(0).getPrivateKey();
       signature.initSign(privateKey);
     } catch (InvalidKeyException e) {
       throw new IllegalStateException("The key returned by MBS should always be valid!", e);

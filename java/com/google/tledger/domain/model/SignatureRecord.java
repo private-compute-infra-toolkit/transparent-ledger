@@ -18,4 +18,11 @@ package com.google.tledger.domain.model;
 
 import com.google.protobuf.ByteString;
 
-public record SignatureRecord(ByteString signature, String algorithm) {}
+/**
+ * Result of signing an entry.
+ *
+ * @param signature the signature bytes
+ * @param algorithm the signing algorithm
+ * @param keyId identifier of the key used to sign; the MBS epoch ID of the signing key
+ */
+public record SignatureRecord(ByteString signature, String algorithm, String keyId) {}

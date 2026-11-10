@@ -23,9 +23,11 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.TrustPackage;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.google.protobuf.ByteString;
 import com.google.tledger.domain.model.Entry;
 import com.google.tledger.domain.ports.EntryIdProvider;
@@ -38,6 +40,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Optional;
 import org.junit.Before;
@@ -64,8 +67,9 @@ public class TLedgerServiceTest {
   private static final String TEST_ENTRY_ID = "test-id";
   private static final String TEST_ENTRY_NAME = "entries/" + TEST_ENTRY_ID;
   private static final String TEST_ALGORITHM_NAME = "SHA256withRSA";
+  private static final int TEST_EPOCH_ID = 3;
   private static final Entry TEST_ENTRY =
-      new Entry(TEST_ENTRY_NAME, TEST_MESSAGE, ByteString.EMPTY, "");
+      new Entry(TEST_ENTRY_NAME, TEST_MESSAGE, ByteString.EMPTY, "", "");
 
   @Before
   public void setUp() throws Exception {
@@ -94,13 +98,18 @@ public class TLedgerServiceTest {
                       protected void configure() {
                         bind(EntryIdProvider.class).toInstance(mockIdProvider);
                         bind(Ledger.class).toInstance(inMemoryLedger);
-                        bind(MeasurementBoundCertificateProvider.class)
+                        bind(TrustPackageProvider.class)
                             .toInstance(
                                 () ->
                                     new TrustPackage(
                                         List.of(
-                                            new MeasurementBoundCertificate(
-                                                null, testRsaKeyPair.getPrivate(), null)),
+                                            new SelfSignedBundleWithEpoch(
+                                                TEST_EPOCH_ID,
+                                                new SelfSignedBundle(
+                                                    mock(X509Certificate.class),
+                                                    testRsaKeyPair.getPrivate(),
+                                                    AttestationToken.fromBytes(
+                                                        "token".getBytes())))),
                                         List.of()));
                       }
                     }));
@@ -129,10 +138,12 @@ public class TLedgerServiceTest {
     assertThat(storedEntry.get().name()).isEqualTo(TEST_ENTRY_NAME);
     assertThat(storedEntry.get().rawEntry()).isEqualTo(TEST_MESSAGE);
     assertThat(storedEntry.get().signature()).isEqualTo(result.signature());
+    assertThat(storedEntry.get().keyId()).isEqualTo(String.valueOf(TEST_EPOCH_ID));
 
     assertThat(result.name()).isEqualTo(TEST_ENTRY_NAME);
     assertThat(result.rawEntry()).isEqualTo(TEST_MESSAGE);
     assertThat(result.signingAlgorithm()).isEqualTo(TEST_ALGORITHM_NAME);
+    assertThat(result.keyId()).isEqualTo(String.valueOf(TEST_EPOCH_ID));
 
     assertThat(verifySignature(TEST_MESSAGE, result.signature(), testRsaKeyPair.getPublic()))
         .isTrue();

@@ -39,6 +39,7 @@ java_test(
         "@maven//:com_linecorp_armeria_armeria_grpc",
         "@maven//:io_micrometer_micrometer_registry_prometheus",
         "@maven//:junit_junit",
+        "@maven//:org_mockito_mockito_core",
         "@maven//:org_testcontainers_localstack",
         "@maven//:org_testcontainers_testcontainers",
         "@maven//:software_amazon_awssdk_auth",
@@ -78,6 +79,7 @@ java_test(
         "@maven//:software_amazon_awssdk_s3",
         "@maven//:software_amazon_awssdk_sdk_core",
         "@pcit_mbs//java/com/google/mbs",
+        "@pcit_mbs//java/com/google/mbs/adapters",
         "@pcit_mbs//java/com/google/mbs/domain",
     ],
 )

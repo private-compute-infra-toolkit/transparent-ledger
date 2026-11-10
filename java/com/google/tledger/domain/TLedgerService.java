@@ -46,7 +46,12 @@ public class TLedgerService implements TLedger {
 
     SignatureRecord signatureInfo = entrySigner.sign(message);
     Entry result =
-        new Entry(entryName, message, signatureInfo.signature(), signatureInfo.algorithm());
+        new Entry(
+            entryName,
+            message,
+            signatureInfo.signature(),
+            signatureInfo.algorithm(),
+            signatureInfo.keyId());
 
     ledger.write(result, entryName);
 

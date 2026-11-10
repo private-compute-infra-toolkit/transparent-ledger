@@ -53,7 +53,8 @@ public class InMemoryLedgerTest {
             "Hi mom",
             ByteString.copyFrom("Hi dad", StandardCharsets.UTF_8),
             ByteString.copyFrom("signature", StandardCharsets.UTF_8),
-            "crypto");
+            "crypto",
+            "0");
 
     ledger.write(content, key);
     Optional<Entry> result = ledger.read(key);
@@ -69,14 +70,16 @@ public class InMemoryLedgerTest {
             key1,
             ByteString.copyFrom("one one", StandardCharsets.UTF_8),
             ByteString.copyFrom("signature1", StandardCharsets.UTF_8),
-            "crypto1");
+            "crypto1",
+            "1");
     String key2 = "two";
     Entry content2 =
         new Entry(
             key2,
             ByteString.copyFrom("one two", StandardCharsets.UTF_8),
             ByteString.copyFrom("signature2", StandardCharsets.UTF_8),
-            "crypto2");
+            "crypto2",
+            "2");
 
     ledger.write(content1, key1);
     ledger.write(content2, key2);

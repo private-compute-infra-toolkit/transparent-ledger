@@ -18,15 +18,18 @@ package com.google.tledger.server;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import com.beust.jcommander.JCommander;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Modules;
-import com.google.mbs.domain.MeasurementBoundCertificate;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.AttestationToken;
+import com.google.mbs.domain.SelfSignedBundle;
+import com.google.mbs.domain.SelfSignedBundleWithEpoch;
 import com.google.mbs.domain.TrustPackage;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.util.JsonFormat;
 import com.google.tledger.annotations.LedgerBucketName;
@@ -47,6 +50,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.List;
 import org.junit.After;
@@ -196,21 +200,25 @@ public class ServerS3IntegrationTest {
                             .annotatedWith(LedgerBucketName.class)
                             .toInstance(bucketName);
                         bind(S3Client.class).toInstance(s3ClientToUse);
-                        bind(MeasurementBoundCertificateProvider.class)
+                        bind(TrustPackageProvider.class)
                             .toInstance(
                                 () ->
                                     new TrustPackage(
                                         List.of(
-                                            new MeasurementBoundCertificate(
-                                                null, testRsaKeyPair.getPrivate(), null)),
+                                            new SelfSignedBundleWithEpoch(
+                                                0,
+                                                new SelfSignedBundle(
+                                                    mock(X509Certificate.class),
+                                                    testRsaKeyPair.getPrivate(),
+                                                    AttestationToken.fromBytes(
+                                                        "token".getBytes())))),
                                         List.of()));
                       }
                     }));
 
     this.handler = injector.getInstance(TransparentLedgerGrpcHandler.class);
     this.meterRegistry = injector.getInstance(PrometheusMeterRegistry.class);
-    MeasurementBoundCertificateProvider certProvider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
+    TrustPackageProvider certProvider = injector.getInstance(TrustPackageProvider.class);
 
     tledgerServer = new TLedgerServer(0, handler, meterRegistry, certProvider);
     tledgerServer.start().join();
@@ -292,6 +300,7 @@ public class ServerS3IntegrationTest {
     assertThat(createdEntry).isNotNull();
     assertThat(createdEntry.getRawEntry()).isEqualTo(rawEntryToCreate);
     assertThat(createdEntry.getName()).isNotEmpty();
+    assertThat(createdEntry.getKeyId()).isEqualTo("0");
     assertThat(
             verifySignature(
                 rawEntryToCreate, createdEntry.getSignature(), testRsaKeyPair.getPublic()))
@@ -409,7 +418,7 @@ public class ServerS3IntegrationTest {
   public void healthz_returnsServiceUnavailableWhenCertificateUninitialized() throws Exception {
     startServerAndSetupClient(BUCKET_NAME);
 
-    MeasurementBoundCertificateProvider uninitializedProvider =
+    TrustPackageProvider uninitializedProvider =
         () -> {
           throw new IllegalStateException("Certificate uninitialized");
         };

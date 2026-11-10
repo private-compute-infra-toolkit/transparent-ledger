@@ -19,4 +19,8 @@ package com.google.tledger.domain.model;
 import com.google.protobuf.ByteString;
 
 public record Entry(
-    String name, ByteString rawEntry, ByteString signature, String signingAlgorithm) {}
+    String name,
+    ByteString rawEntry,
+    ByteString signature,
+    String signingAlgorithm,
+    String keyId) {}

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## 0.10.0 (2026-11-10)
+
+
+### Features
+
+* Add keyCertSign to root certificate keyUsage
+* cap active certificate MultiGauge tag cardinality
+* return MBS epoch ID as key_id in entries
+* update MBS submodule to 0.14.0 and support new MBS metrics
+
 ## 0.9.0 (2026-10-14)
 
 

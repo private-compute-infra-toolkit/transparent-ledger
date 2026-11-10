@@ -23,10 +23,13 @@ import com.beust.jcommander.JCommander;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Key;
-import com.google.mbs.MbsCertificateFactory;
 import com.google.mbs.domain.CertificateMonitor;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
-import com.google.mbs.domain.MeasurementBoundCertificateReloader;
+import com.google.mbs.domain.CertificatesConfigProvider;
+import com.google.mbs.domain.SelfSignedCertificate;
+import com.google.mbs.domain.SelfSignedCertificateFactory;
+import com.google.mbs.domain.TrustPackageProvider;
+import com.google.mbs.domain.TrustPackageReloader;
+import com.google.mbs.domain.ValidityPeriod;
 import com.google.mbs.qualifier.InstanceId;
 import com.google.mbs.qualifier.KmsKeyArn;
 import com.google.mbs.qualifier.PrivateBackupBucket;
@@ -44,10 +47,13 @@ import com.google.tledger.domain.ports.EntrySigner;
 import com.google.tledger.domain.ports.Ledger;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.security.cert.X509Certificate;
+import java.time.Duration;
+import java.time.Instant;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
+import org.bouncycastle.asn1.x509.KeyUsage;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -169,22 +175,22 @@ public class TLedgerModuleTest {
   }
 
   @Test
-  public void configure_bindsMeasurementBoundCertificateProvider() {
-    MeasurementBoundCertificateProvider provider =
-        injector.getInstance(MeasurementBoundCertificateProvider.class);
-    MeasurementBoundCertificateReloader reloader =
-        injector.getInstance(MeasurementBoundCertificateReloader.class);
+  public void configure_bindsTrustPackageProvider() throws Exception {
+    TrustPackageProvider provider = injector.getInstance(TrustPackageProvider.class);
+    TrustPackageReloader reloader = injector.getInstance(TrustPackageReloader.class);
     assertThat(provider).isNotNull();
     assertThat(reloader).isNotNull();
 
-    // In MBS 0.9.0+, getCertificate() is decoupled from reloadCertificate() and throws
-    // IllegalStateException until the certificate is loaded or generated.
+    // In MBS, getActiveTrustPackage() is decoupled from reload() and throws
+    // IllegalStateException until the trust package is loaded or generated.
     assertThrows(IllegalStateException.class, provider::getActiveTrustPackage);
 
-    reloader.reloadCertificate();
-    assertThat(provider.getActiveTrustPackage().bundles().get(0)).isNotNull();
-    assertThat(provider.getActiveTrustPackage().bundles().get(0).getCertificate()).isNotNull();
-    assertThat(provider.getActiveTrustPackage().bundles().get(0).getPrivateKey()).isNotNull();
+    reloader.reload(injector.getInstance(CertificatesConfigProvider.class).getCertificatesConfig());
+    assertThat(provider.getActiveTrustPackage().selfSignedBundles().get(0)).isNotNull();
+    assertThat(provider.getActiveTrustPackage().selfSignedBundles().get(0).bundle().certificate())
+        .isNotNull();
+    assertThat(provider.getActiveTrustPackage().selfSignedBundles().get(0).bundle().privateKey())
+        .isNotNull();
   }
 
   @Test
@@ -218,13 +224,13 @@ public class TLedgerModuleTest {
         .isNotNull();
     assertThat(kmsInjector.getInstance(com.google.mbs.domain.Metrics.class))
         .isInstanceOf(SystemMetrics.class);
-    assertThat(kmsInjector.getInstance(MeasurementBoundCertificateProvider.class)).isNotNull();
-    assertThat(kmsInjector.getInstance(MeasurementBoundCertificateReloader.class)).isNotNull();
+    assertThat(kmsInjector.getInstance(TrustPackageProvider.class)).isNotNull();
+    assertThat(kmsInjector.getInstance(TrustPackageReloader.class)).isNotNull();
     assertThat(kmsInjector.getInstance(CertificateMonitor.class)).isNotNull();
   }
 
   @Test
-  public void provideMbsCertificateFactory_generatesCertificateWithCorrectSpiffeIdInSan()
+  public void provideSelfSignedCertificateFactory_generatesCertificateWithCorrectSpiffeIdInSan()
       throws Exception {
     TLedgerModule module =
         new TLedgerModule(
@@ -232,11 +238,24 @@ public class TLedgerModuleTest {
             new AwsInstanceMetadata(
                 TEST_REGION, TEST_ACCOUNT_ID, "testenv", "testdomain", "i-testinstance"));
 
-    MbsCertificateFactory factory = module.provideMbsCertificateFactory();
-    X509Certificate rootCert = factory.generate().certificate();
+    SelfSignedCertificateFactory factory = module.provideSelfSignedCertificateFactory();
+    X509Certificate rootCert =
+        factory
+            .generate(
+                new SelfSignedCertificate(
+                    0,
+                    new ValidityPeriod(
+                        Instant.now().minus(Duration.ofDays(1)),
+                        Instant.now().plus(Duration.ofDays(1)))))
+            .certificate();
 
     assertThat(rootCert.getSubjectX500Principal().getName())
-        .isEqualTo("CN=TLedger,O=Google LLC,C=US");
+        .isEqualTo("CN=TLedger G0,O=Google LLC,C=US");
+    assertThat(
+            KeyUsage.getInstance(
+                ASN1OctetString.getInstance(rootCert.getExtensionValue(Extension.keyUsage.getId()))
+                    .getOctets()))
+        .isEqualTo(new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign));
 
     String expectedSpiffeId =
         "spiffe://tledger.testenv.testdomain/operator/pcit.goog/123456789012/publisher/google.com/pcit-release-bot/workload/transparent-ledger";
@@ -254,15 +273,23 @@ public class TLedgerModuleTest {
   }
 
   @Test
-  public void provideMbsCertificateFactory_prodEnv_stripsAwsSubdomain() throws Exception {
+  public void provideSelfSignedCertificateFactory_prodEnv_stripsAwsSubdomain() throws Exception {
     TLedgerModule module =
         new TLedgerModule(
             mockArgs,
             new AwsInstanceMetadata(
                 TEST_REGION, TEST_ACCOUNT_ID, "prod", "aws.pcit.goog", "i-testinstance"));
 
-    MbsCertificateFactory factory = module.provideMbsCertificateFactory();
-    X509Certificate rootCert = factory.generate().certificate();
+    SelfSignedCertificateFactory factory = module.provideSelfSignedCertificateFactory();
+    X509Certificate rootCert =
+        factory
+            .generate(
+                new SelfSignedCertificate(
+                    0,
+                    new ValidityPeriod(
+                        Instant.now().minus(Duration.ofDays(1)),
+                        Instant.now().plus(Duration.ofDays(1)))))
+            .certificate();
 
     String expectedSpiffeId =
         "spiffe://tledger.pcit.goog/operator/pcit.goog/123456789012/publisher/google.com/pcit-release-bot/workload/transparent-ledger";

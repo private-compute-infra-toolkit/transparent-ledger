@@ -31,15 +31,28 @@
               "source_labels": ["job"],
               "label_matcher": "^tledger$",
               "dimensions": [["status"]],
-              "metric_selectors": ["^tledger_mbsStatus$"]
+              "metric_selectors": [
+                "^tledger_mbsStatus$",
+                "^tledger_mbsGenerationStatus$",
+                "^tledger_mbsLoadStatus$",
+                "^tledger_mbsConfigStatus$"
+              ]
+            },
+            {
+              "source_labels": ["job"],
+              "label_matcher": "^tledger$",
+              "dimensions": [["epoch"]],
+              "metric_selectors": [
+                "^tledger_mbsActiveSelfSignedCertificate$",
+                "^tledger_mbsActiveCrossSignedCertificate$"
+              ]
             },
             {
               "source_labels": ["job"],
               "label_matcher": "^tledger$",
               "dimensions": [[]],
               "metric_selectors": [
-                "^tledger_root_certificate_validity_seconds$",
-                "^tledger_certificate_reload_failed$"
+                "^tledger_root_certificate_validity_seconds$"
               ]
             }
           ]

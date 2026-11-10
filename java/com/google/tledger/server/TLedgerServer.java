@@ -17,7 +17,7 @@
 package com.google.tledger.server;
 
 import com.google.common.flogger.FluentLogger;
-import com.google.mbs.domain.MeasurementBoundCertificateProvider;
+import com.google.mbs.domain.TrustPackageProvider;
 import com.linecorp.armeria.common.HttpResponse;
 import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.common.grpc.GrpcMeterIdPrefixFunction;
@@ -40,14 +40,14 @@ public class TLedgerServer {
 
   private final Server server;
   private final HealthManager healthManager;
-  private final MeasurementBoundCertificateProvider certificateProvider;
+  private final TrustPackageProvider certificateProvider;
   private final int port;
 
   public TLedgerServer(
       int port,
       TransparentLedgerGrpcHandler service,
       PrometheusMeterRegistry meterRegistry,
-      MeasurementBoundCertificateProvider certificateProvider) {
+      TrustPackageProvider certificateProvider) {
     this.port = port;
     this.certificateProvider = certificateProvider;
     this.healthManager = new HealthManager();
@@ -110,7 +110,7 @@ public class TLedgerServer {
     return server;
   }
 
-  // In MBS 0.9.0, getCertificate() is decoupled from reloads and throws IllegalStateException
+  // In MBS, getActiveTrustPackage() is decoupled from reloads and throws IllegalStateException
   // if invoked prior to initial root certificate loading. Healthcheck validates both active
   // server lifecycle and presence of valid cryptographic material.
   boolean isHealthy() {
@@ -118,7 +118,7 @@ public class TLedgerServer {
       return false;
     }
     try {
-      return certificateProvider.getActiveTrustPackage().bundles().get(0) != null;
+      return !certificateProvider.getActiveTrustPackage().selfSignedBundles().isEmpty();
     } catch (IllegalStateException e) {
       logger.atFine().log("Healthcheck failed: certificate is not available yet.");
       return false;

@@ -54,7 +54,11 @@ public class S3LedgerTest {
   private static final String NAME = "object/123";
   private final Entry TEST_ENTRY =
       new Entry(
-          NAME, ByteString.copyFrom("raw entry", StandardCharsets.UTF_8), ByteString.EMPTY, "");
+          NAME,
+          ByteString.copyFrom("raw entry", StandardCharsets.UTF_8),
+          ByteString.EMPTY,
+          "",
+          "7");
   private final JsonFormat.Printer printer = JsonFormat.printer();
   private final JsonFormat.Parser parser = JsonFormat.parser();
   private String TEST_ENTRY_JSON;
